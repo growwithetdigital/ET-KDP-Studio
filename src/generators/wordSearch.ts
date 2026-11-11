@@ -1,4 +1,4 @@
-import { WordSearchPuzzle, WordSearchPlacement } from '../types';
+import { WordSearchPuzzle, WordSearchPlacement, DifficultyLevel, TargetAudience } from '../types';
 
 function seededRandom(seed: number) {
   let s = seed % 2147483647;
@@ -9,58 +9,101 @@ function seededRandom(seed: number) {
   };
 }
 
-// 8 Directions: [rowDelta, colDelta]
-const DIRECTIONS: [number, number][] = [
-  [0, 1],   // Left to Right
-  [1, 0],   // Top to Bottom
-  [1, 1],   // Diagonal Down-Right
-  [-1, 1],  // Diagonal Up-Right
-  [0, -1],  // Right to Left
-  [-1, 0],  // Bottom to Top
-  [1, -1],  // Diagonal Down-Left
-  [-1, -1], // Diagonal Up-Left
+// 8 Directions: [dr, dc]
+const ALL_DIRECTIONS: [number, number][] = [
+  [0, 1],   // L -> R
+  [1, 0],   // T -> B
+  [1, 1],   // Diag Down-Right
+  [-1, 1],  // Diag Up-Right
+  [0, -1],  // R -> L
+  [-1, 0],  // B -> T
+  [1, -1],  // Diag Down-Left
+  [-1, -1], // Diag Up-Left
+];
+
+const MEDIUM_DIRECTIONS: [number, number][] = [
+  [0, 1],
+  [1, 0],
+  [1, 1],
+  [-1, 1],
+  [1, -1],
+];
+
+const EASY_DIRECTIONS: [number, number][] = [
+  [0, 1],
+  [1, 0],
+];
+
+const WORD_PROMPTS = [
+  'Let your gaze soften as you trace the hidden harmony of letters.',
+  'Unwind each thought; scan with calm, patient curiosity.',
+  'Finding each word is a small moment of quiet accomplishment.',
+  'Notice how effortlessly your mind connects the scattered letters.',
+  'Breathe gently. There is satisfaction in discovery.',
+  'Large-print letters bring effortless clarity and comfortable focus.',
 ];
 
 export function generateWordSearch(
   puzzleNumber: number,
   subtheme: string,
   rawWords: string[],
-  gridSize = 13,
-  seed = 100
+  customGridSize?: number,
+  seed = 100,
+  customPrompt?: string,
+  audience: TargetAudience = 'adults',
+  totalCount = 25,
+  customDifficulty?: DifficultyLevel
 ): WordSearchPuzzle {
   const rng = seededRandom(seed + puzzleNumber * 9871);
 
-  // Normalize words: uppercase, remove non-alphas, filter length
+  // 1/3 progression: 1st third Easy, 2nd third Medium, 3rd third Hard
+  const third = Math.ceil(totalCount / 3);
+  const difficulty: DifficultyLevel =
+    customDifficulty ||
+    (puzzleNumber <= third ? 'Easy' : puzzleNumber <= third * 2 ? 'Medium' : 'Hard');
+
+  const tier: 1 | 2 | 3 = difficulty === 'Easy' ? 1 : difficulty === 'Medium' ? 2 : 3;
+
+  const isKids = audience === 'kids' || audience === 'toddlers';
+  const gridSize =
+    customGridSize ||
+    (isKids ? (difficulty === 'Easy' ? 8 : 10) : difficulty === 'Easy' ? 11 : difficulty === 'Medium' ? 13 : 14);
+
+  const maxWords =
+    isKids ? (difficulty === 'Easy' ? 6 : 8) : difficulty === 'Easy' ? 8 : difficulty === 'Medium' ? 10 : 12;
+
+  const directions =
+    isKids || difficulty === 'Easy'
+      ? EASY_DIRECTIONS
+      : difficulty === 'Medium'
+      ? MEDIUM_DIRECTIONS
+      : ALL_DIRECTIONS;
+
   const cleanWords = Array.from(
     new Set(
       rawWords
         .map((w) => w.toUpperCase().replace(/[^A-Z]/g, ''))
         .filter((w) => w.length >= 3 && w.length <= gridSize)
     )
-  ).slice(0, 12);
+  ).slice(0, maxWords);
 
-  // Initialize empty grid with spaces
   const grid: string[][] = Array.from({ length: gridSize }, () =>
     Array(gridSize).fill(' ')
   );
 
   const placements: WordSearchPlacement[] = [];
-
-  // Sort words longest to shortest for better placement success
   const sortedWords = [...cleanWords].sort((a, b) => b.length - a.length);
 
   for (const word of sortedWords) {
     let placed = false;
     let attempts = 0;
-    const maxAttempts = 200;
+    const maxAttempts = 300;
 
     while (!placed && attempts < maxAttempts) {
       attempts++;
-      // Pick random direction (biased slightly towards forward/down/diag-down for readability)
-      const dirIndex = Math.floor(rng() * DIRECTIONS.length);
-      const [dr, dc] = DIRECTIONS[dirIndex];
+      const dirIndex = Math.floor(rng() * directions.length);
+      const [dr, dc] = directions[dirIndex];
 
-      // Calculate valid start bounds
       const minRow = dr === -1 ? word.length - 1 : 0;
       const maxRow = dr === 1 ? gridSize - word.length : gridSize - 1;
       const minCol = dc === -1 ? word.length - 1 : 0;
@@ -71,7 +114,6 @@ export function generateWordSearch(
       const startRow = Math.floor(rng() * (maxRow - minRow + 1)) + minRow;
       const startCol = Math.floor(rng() * (maxCol - minCol + 1)) + minCol;
 
-      // Check collision
       let canPlace = true;
       const cells: [number, number][] = [];
 
@@ -104,7 +146,6 @@ export function generateWordSearch(
     }
   }
 
-  // Fill empty spaces with random uppercase A-Z
   const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   for (let r = 0; r < gridSize; r++) {
     for (let c = 0; c < gridSize; c++) {
@@ -114,34 +155,57 @@ export function generateWordSearch(
     }
   }
 
+  const prompt =
+    customPrompt ||
+    (audience === 'seniors'
+      ? 'Large Print Word Search: Extra bold letters for comfortable reading.'
+      : isKids
+      ? 'Can you spot all the hidden words? Look across and down!'
+      : WORD_PROMPTS[(puzzleNumber - 1) % WORD_PROMPTS.length]);
+
   return {
     id: `wordsearch-${puzzleNumber}`,
     puzzleNumber,
+    title:
+      audience === 'seniors'
+        ? `Large Print Search: ${subtheme}`
+        : isKids
+        ? `Fun Search: ${subtheme}`
+        : `Word Search: ${subtheme}`,
     subtheme,
+    mindfulPrompt: prompt,
+    difficulty,
+    difficultyTier: tier,
     gridSize,
     grid,
     words: placements.map((p) => p.word),
     placements,
+    isLargePrint: audience === 'seniors',
   };
 }
 
-export function generate25WordSearches(
-  vocabularies: { title: string; words: string[] }[],
-  baseSeed = 200
+export function generateWordSearchSection(
+  count = 25,
+  vocabularies: { title: string; words: string[]; prompt?: string }[],
+  baseSeed = 200,
+  audience: TargetAudience = 'adults'
 ): WordSearchPuzzle[] {
   const puzzles: WordSearchPuzzle[] = [];
-  for (let i = 1; i <= 25; i++) {
+  for (let i = 1; i <= count; i++) {
     const vocab = vocabularies[(i - 1) % vocabularies.length] || {
-      title: `Theme Challenge #${i}`,
-      words: ['CHALLENGE', 'PUZZLE', 'SEARCH', 'VICTORY', 'QUEST', 'HERO', 'LEGEND', 'MASTER'],
+      title: `Search #${i}`,
+      words: ['CALM', 'SERENE', 'PEACE', 'BREATHE', 'HARMONY', 'STILLNESS'],
     };
     puzzles.push(
       generateWordSearch(
         i,
         vocab.title,
         vocab.words,
-        13, // 13x13 is optimal for 8.5x11 page readability in KDP
-        baseSeed + i * 4231
+        undefined,
+        baseSeed + i * 4231,
+        vocab.prompt,
+        audience,
+        count
       )
     );
   }

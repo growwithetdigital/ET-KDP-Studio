@@ -1,4 +1,4 @@
-import { MazePuzzle } from '../types';
+import { MazePuzzle, DifficultyLevel, TargetAudience } from '../types';
 
 function seededRandom(seed: number) {
   let s = seed % 2147483647;
@@ -9,23 +9,46 @@ function seededRandom(seed: number) {
   };
 }
 
-// Generates a maze using recursive backtracker (DFS) on odd-dimension grid
-// 1 = Wall, 0 = Path
+const MAZE_PROMPTS = [
+  'Every turn is a lesson in patience. Follow the path with an easy breath.',
+  'Dead ends are not failures; they are gentle invitations to redirect.',
+  'Let your pen trace slowly, releasing hurried thoughts with every curve.',
+  'Trust that every labyrinth has an opening waiting for you.',
+  'Stay centered in the present passage, unconcerned with the finish until it arrives.',
+];
+
 export function generateMaze(
   puzzleNumber: number,
-  gridWidth = 23,
-  gridHeight = 23,
-  seed = 300
+  customWidth?: number,
+  customHeight?: number,
+  seed = 300,
+  customPrompt?: string,
+  audience: TargetAudience = 'adults',
+  totalCount = 25,
+  customDifficulty?: DifficultyLevel
 ): MazePuzzle {
   const rng = seededRandom(seed + puzzleNumber * 6113);
 
-  // Initialize all walls
+  // 1/3 progression: 1st third Easy, 2nd third Medium, 3rd third Hard
+  const third = Math.ceil(totalCount / 3);
+  const difficulty: DifficultyLevel =
+    customDifficulty ||
+    (puzzleNumber <= third ? 'Easy' : puzzleNumber <= third * 2 ? 'Medium' : 'Hard');
+
+  const tier: 1 | 2 | 3 = difficulty === 'Easy' ? 1 : difficulty === 'Medium' ? 2 : 3;
+
+  const isKids = audience === 'kids' || audience === 'toddlers';
+  const defaultSize = isKids
+    ? (difficulty === 'Easy' ? 11 : difficulty === 'Medium' ? 15 : 19)
+    : (difficulty === 'Easy' ? 17 : difficulty === 'Medium' ? 23 : 29);
+
+  const gridWidth = customWidth || defaultSize;
+  const gridHeight = customHeight || defaultSize;
+
   const grid: number[][] = Array.from({ length: gridHeight }, () =>
     Array(gridWidth).fill(1)
   );
 
-  // Carve passages
-  // Passage cells are at odd coordinates (2r+1, 2c+1)
   const cellHeight = Math.floor((gridHeight - 1) / 2);
   const cellWidth = Math.floor((gridWidth - 1) / 2);
 
@@ -40,17 +63,16 @@ export function generateMaze(
   stack.push(startCell);
 
   const neighbors: [number, number][] = [
-    [-1, 0], // Up
-    [1, 0],  // Down
-    [0, -1], // Left
-    [0, 1],  // Right
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
   ];
 
   while (stack.length > 0) {
     const [cr, cc] = stack[stack.length - 1];
 
-    // Find unvisited neighbors
-    const validNeighbors: [number, number, number, number][] = []; // [nr, nc, dr, dc]
+    const validNeighbors: [number, number, number, number][] = [];
     for (const [dr, dc] of neighbors) {
       const nr = cr + dr;
       const nc = cc + dc;
@@ -60,11 +82,9 @@ export function generateMaze(
     }
 
     if (validNeighbors.length > 0) {
-      // Pick random neighbor
       const idx = Math.floor(rng() * validNeighbors.length);
       const [nr, nc, dr, dc] = validNeighbors[idx];
 
-      // Remove wall between (2*cr+1, 2*cc+1) and (2*nr+1, 2*nc+1)
       const wallR = 2 * cr + 1 + dr;
       const wallC = 2 * cc + 1 + dc;
       const targetR = 2 * nr + 1;
@@ -80,13 +100,12 @@ export function generateMaze(
     }
   }
 
-  // Create Start and Finish doorways
   const startPos: [number, number] = [0, 1];
   const finishPos: [number, number] = [gridHeight - 1, gridWidth - 2];
-  grid[0][1] = 0; // Entry
-  grid[gridHeight - 1][gridWidth - 2] = 0; // Exit
+  grid[0][1] = 0;
+  grid[gridHeight - 1][gridWidth - 2] = 0;
 
-  // Solve the maze using BFS to find shortest path from start to finish
+  // BFS solution
   const queue: [number, number][] = [startPos];
   const parentMap = new Map<string, [number, number]>();
   const seen = new Set<string>();
@@ -128,7 +147,6 @@ export function generateMaze(
     }
   }
 
-  // Reconstruct solution path
   const solutionPath: [number, number][] = [];
   if (found) {
     let curr: [number, number] | undefined = finishPos;
@@ -139,24 +157,37 @@ export function generateMaze(
     }
   }
 
+  const prompt =
+    customPrompt ||
+    (isKids
+      ? 'Help navigate through the maze to reach the goal!'
+      : MAZE_PROMPTS[(puzzleNumber - 1) % MAZE_PROMPTS.length]);
+
   return {
     id: `maze-${puzzleNumber}`,
     puzzleNumber,
+    title: isKids ? `Kids Maze Challenge #${puzzleNumber}` : `Maze Challenge #${puzzleNumber}`,
+    mindfulPrompt: prompt,
+    difficulty,
+    difficultyTier: tier,
     width: gridWidth,
     height: gridHeight,
     grid,
     start: startPos,
     finish: finishPos,
     solutionPath,
+    corridorWidth: isKids || difficulty === 'Easy' ? 'wide' : 'standard',
   };
 }
 
-export function generate25Mazes(baseSeed = 500): MazePuzzle[] {
+export function generateMazeSection(
+  count = 25,
+  baseSeed = 500,
+  audience: TargetAudience = 'adults'
+): MazePuzzle[] {
   const mazes: MazePuzzle[] = [];
-  for (let i = 1; i <= 25; i++) {
-    // Dynamic difficulty: size increases slightly from 21x21 to 25x25
-    const size = i <= 8 ? 21 : i <= 18 ? 23 : 25;
-    mazes.push(generateMaze(i, size, size, baseSeed + i * 8831));
+  for (let i = 1; i <= count; i++) {
+    mazes.push(generateMaze(i, undefined, undefined, baseSeed + i * 8831, undefined, audience, count));
   }
   return mazes;
 }

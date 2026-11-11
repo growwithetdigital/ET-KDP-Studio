@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { PuzzlePage, KdpMarginConfig } from '../types';
+import { PuzzlePage, KdpMarginConfig, SudokuPuzzle, WordSearchPuzzle, MazePuzzle, MandalaPuzzle } from '../types';
 import { drawMandalaToCanvas } from '../generators/mandala';
-import { Eye, EyeOff, Sparkles, CheckCircle, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
+import { Eye, EyeOff, RefreshCw, ZoomIn, ZoomOut, Edit3, ShieldAlert } from 'lucide-react';
 
 interface PageRendererProps {
-  page: PuzzlePage;
+  page?: PuzzlePage | null;
   config: KdpMarginConfig;
   themeName: string;
+  onOpenEditor?: () => void;
   onGenerateAiArt?: (pageIndex: number, prompt: string) => Promise<void>;
   isGeneratingArt?: boolean;
 }
@@ -15,6 +16,7 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
   page,
   config,
   themeName,
+  onOpenEditor,
   onGenerateAiArt,
   isGeneratingArt = false,
 }) => {
@@ -22,89 +24,142 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
   const [zoom, setZoom] = useState(1);
   const mandalaCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const pageNumber = page.pageIndex + 1;
-  const isOdd = pageNumber % 2 !== 0;
-
-  // Render Mandala on canvas when page changes
   useEffect(() => {
-    if (page.type === 'coloring' && mandalaCanvasRef.current && !page.data.aiImageUrl) {
-      const canvas = mandalaCanvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        drawMandalaToCanvas(ctx, 1200, 1200, page.data);
+    if (page && page.type === 'coloring' && mandalaCanvasRef.current) {
+      const mandalaData = page.data as MandalaPuzzle;
+      if (!mandalaData.aiImageUrl) {
+        const canvas = mandalaCanvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          drawMandalaToCanvas(ctx, 1400, 1400, mandalaData);
+        }
       }
     }
   }, [page]);
 
+  if (!page) {
+    return (
+      <div className="flex flex-col items-center justify-center p-16 text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-xs">
+        <RefreshCw className="animate-spin w-7 h-7 text-indigo-500 mb-2.5" />
+        <span className="text-xs font-medium text-slate-600">Preparing activity page...</span>
+      </div>
+    );
+  }
+
+  const pageNumber = page.pageNumber;
+  const isOdd = pageNumber % 2 !== 0;
+
+  // Difficulty Tier dots (● ○ ○, ● ● ○, ● ● ●)
+  const renderDifficultyMeter = (tier: 1 | 2 | 3, level: string) => {
+    return (
+      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold tracking-wider uppercase bg-slate-50 border border-slate-200 text-slate-700 shadow-2xs">
+        <span className="text-slate-400">DIFF:</span>
+        <span
+          className={`font-bold ${
+            level === 'Easy'
+              ? 'text-emerald-700'
+              : level === 'Medium'
+              ? 'text-amber-700'
+              : 'text-rose-700'
+          }`}
+        >
+          {level.toUpperCase()} ({tier}/3)
+        </span>
+        <span className="flex gap-0.5 ml-0.5">
+          <span className={tier >= 1 ? 'text-indigo-600 font-bold' : 'text-slate-300'}>●</span>
+          <span className={tier >= 2 ? 'text-indigo-600 font-bold' : 'text-slate-300'}>●</span>
+          <span className={tier >= 3 ? 'text-indigo-600 font-bold' : 'text-slate-300'}>●</span>
+        </span>
+      </div>
+    );
+  };
+
+  const sudokuData = page.type === 'sudoku' ? (page.data as SudokuPuzzle) : null;
+  const wordSearchData = page.type === 'wordsearch' ? (page.data as WordSearchPuzzle) : null;
+  const mazeData = page.type === 'maze' ? (page.data as MazePuzzle) : null;
+  const coloringData = page.type === 'coloring' ? (page.data as MandalaPuzzle) : null;
+
   return (
     <div className="flex flex-col items-center w-full">
-      {/* Top Toolbar */}
-      <div className="w-full max-w-4xl flex items-center justify-between mb-4 bg-slate-900/80 backdrop-blur-md px-4 py-2.5 rounded-xl border border-slate-800 text-sm">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-indigo-400">Page {pageNumber} of 100</span>
-          <span className="text-slate-500">•</span>
-          <span className="px-2.5 py-0.5 rounded-full text-xs font-medium uppercase tracking-wider bg-slate-800 text-slate-300 border border-slate-700">
+      {/* Studio Preview Controls Bar */}
+      <div className="w-full max-w-4xl flex items-center justify-between mb-4 bg-white px-4 py-2 rounded-xl border border-slate-200/80 shadow-xs text-xs text-slate-700">
+        <div className="flex items-center gap-2.5">
+          <span className="font-serif font-bold text-slate-900 text-sm">
+            Book Page {pageNumber}
+          </span>
+          <span className="text-slate-300">•</span>
+          <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-100">
             {page.type}
           </span>
-          <span className="text-slate-400 hidden sm:inline text-xs">
+          <span className="text-slate-400 hidden sm:inline text-[11px]">
             ({isOdd ? 'Right Page / Spine Left' : 'Left Page / Spine Right'})
           </span>
         </div>
 
         <div className="flex items-center gap-2">
+          {onOpenEditor && (
+            <button
+              onClick={onOpenEditor}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition shadow-2xs"
+            >
+              <Edit3 size={13} className="text-indigo-600" />
+              <span>Edit Page</span>
+            </button>
+          )}
+
           <button
             onClick={() => setShowSolution(!showSolution)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition shadow-2xs ${
               showSolution
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
             }`}
           >
-            {showSolution ? <EyeOff size={14} /> : <Eye size={14} />}
-            {showSolution ? 'Hide Solution' : 'Show Solution Key'}
+            {showSolution ? <EyeOff size={13} /> : <Eye size={13} />}
+            <span>{showSolution ? 'Hide Solution' : 'Solution Key'}</span>
           </button>
 
-          <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700">
+          <div className="flex items-center bg-slate-100/80 rounded-lg p-0.5 border border-slate-200">
             <button
               onClick={() => setZoom((z) => Math.max(0.7, z - 0.1))}
-              className="p-1 text-slate-400 hover:text-white"
+              className="p-1 text-slate-600 hover:text-slate-900"
               title="Zoom Out"
             >
-              <ZoomOut size={14} />
+              <ZoomOut size={13} />
             </button>
-            <span className="text-[11px] text-slate-300 px-1 font-mono">{Math.round(zoom * 100)}%</span>
+            <span className="text-[11px] text-slate-600 px-1 font-mono font-medium">
+              {Math.round(zoom * 100)}%
+            </span>
             <button
-              onClick={() => setZoom((z) => Math.min(1.4, z + 0.1))}
-              className="p-1 text-slate-400 hover:text-white"
+              onClick={() => setZoom((z) => Math.min(1.3, z + 0.1))}
+              className="p-1 text-slate-600 hover:text-slate-900"
               title="Zoom In"
             >
-              <ZoomIn size={14} />
+              <ZoomIn size={13} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* 8.5" x 11" Paper Canvas Container */}
+      {/* 8.5" x 11" Paper Canvas Container with Elite High-End Framing */}
       <div
-        className="relative transition-transform duration-200 shadow-2xl rounded-sm bg-white text-slate-900 border border-slate-300 overflow-hidden select-none"
+        className="relative transition-transform duration-150 shadow-xl rounded-sm bg-white text-slate-900 border border-slate-200/90 overflow-hidden select-none"
         style={{
-          width: `${600 * zoom}px`,
-          height: `${776 * zoom}px`, // 8.5 x 11 aspect ratio = 1 : 1.294
+          width: `${595 * zoom}px`,
+          height: `${770 * zoom}px`, // 8.5 x 11 aspect ratio = 1 : 1.294
         }}
       >
-        {/* KDP Bleed & Margin Guidelines Overlay */}
+        {/* KDP Bleed & Margin Guidelines Overlay (ONLY shown when user turns toggle on) */}
         {config.showGuides && (
           <div className="absolute inset-0 pointer-events-none z-30">
-            {/* Red Bleed Cut Line (0.125" = ~1.5% margin) */}
-            <div className="absolute inset-2 border border-dashed border-rose-500/70">
-              <span className="absolute top-1 left-2 text-[9px] font-mono font-bold text-rose-600 bg-white/90 px-1 rounded shadow-sm">
-                0.125" Bleed Line
+            <div className="absolute inset-2 border border-dashed border-rose-400/50">
+              <span className="absolute top-1 left-2 text-[8px] font-mono font-bold text-rose-500 bg-white/90 px-1 rounded shadow-2xs">
+                Trim Bleed
               </span>
             </div>
 
-            {/* Safe Zone (0.375" = ~4.5% margin) */}
             <div
-              className="absolute border border-dashed border-amber-500/60"
+              className="absolute border border-dashed border-amber-400/50"
               style={{
                 top: '5%',
                 bottom: '5%',
@@ -112,14 +167,13 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
                 right: isOdd ? '5%' : '8%',
               }}
             >
-              <span className="absolute bottom-1 right-2 text-[9px] font-mono font-bold text-amber-600 bg-white/90 px-1 rounded shadow-sm">
-                Safe Margin Zone
+              <span className="absolute bottom-1 right-2 text-[8px] font-mono font-bold text-amber-500 bg-white/90 px-1 rounded shadow-2xs">
+                Safe Margin
               </span>
             </div>
 
-            {/* Spine Gutter Margin Indicator */}
             <div
-              className="absolute top-0 bottom-0 bg-emerald-500/10 border-emerald-500/40"
+              className="absolute top-0 bottom-0 bg-emerald-500/5 border-emerald-500/20"
               style={{
                 width: '8%',
                 left: isOdd ? 0 : 'auto',
@@ -127,100 +181,117 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
                 borderRightWidth: isOdd ? '1px' : '0',
                 borderLeftWidth: isOdd ? '0' : '1px',
               }}
-            >
-              <span
-                className="absolute top-1/2 -translate-y-1/2 text-[9px] font-mono font-bold text-emerald-700 bg-white/90 px-1 py-0.5 rounded shadow-sm whitespace-nowrap"
-                style={{
-                  transform: isOdd ? 'rotate(90deg) translateY(-50%)' : 'rotate(-90deg) translateY(-50%)',
-                  left: isOdd ? '2px' : 'auto',
-                  right: isOdd ? 'auto' : '2px',
-                }}
-              >
-                KDP Spine Gutter ({isOdd ? 'Left' : 'Right'})
-              </span>
-            </div>
+            />
           </div>
         )}
 
-        {/* Paper Content Wrapper with authentic KDP Gutter Padding */}
+        {/* Paper Content Wrapper (Clean 0.01% elite editorial layout with authentic KDP Gutter Padding) */}
         <div
           className="w-full h-full flex flex-col justify-between"
           style={{
-            paddingTop: `${36 * zoom}px`,
-            paddingBottom: `${28 * zoom}px`,
-            paddingLeft: `${(isOdd ? 48 : 34) * zoom}px`,
-            paddingRight: `${(isOdd ? 34 : 48) * zoom}px`,
+            paddingTop: `${30 * zoom}px`,
+            paddingBottom: `${24 * zoom}px`,
+            paddingLeft: `${(isOdd ? 44 : 32) * zoom}px`,
+            paddingRight: `${(isOdd ? 32 : 44) * zoom}px`,
           }}
         >
-          {/* Header */}
-          <div className="text-center border-b border-slate-200 pb-2">
-            <p className="text-[10px] tracking-widest uppercase font-semibold text-slate-400">
-              {themeName}
-            </p>
-            <h2 className="text-lg font-bold tracking-tight text-slate-800">
-              {page.type === 'sudoku' && `Sudoku #${page.data.puzzleNumber} - ${page.data.difficulty}`}
-              {page.type === 'wordsearch' && `Word Search #${page.data.puzzleNumber}: ${page.data.subtheme}`}
-              {page.type === 'maze' && `Maze Challenge #${page.data.puzzleNumber}`}
-              {page.type === 'coloring' && (page.data.promptDescription ? `Coloring Art: ${page.data.promptDescription.slice(0, 38)}...` : page.data.title)}
+          {/* Elite Header */}
+          <div className="text-center pb-1.5 border-b border-slate-100/80">
+            <div className="flex items-center justify-between px-2 mb-1">
+              <span className="text-[8.5px] tracking-[0.25em] uppercase font-semibold text-slate-400">
+                {themeName} • {page.sectionTitle}
+              </span>
+              {renderDifficultyMeter(page.difficultyTier, page.difficulty)}
+            </div>
+
+            <h2 className="text-lg font-serif font-bold text-slate-900 tracking-tight">
+              {page.data.title ||
+                (page.type === 'sudoku' && `Sudoku #${page.data.puzzleNumber}`) ||
+                (page.type === 'wordsearch' && `Word Search: ${wordSearchData?.subtheme}`) ||
+                (page.type === 'maze' && `Maze Challenge #${page.data.puzzleNumber}`) ||
+                (page.type === 'coloring' && coloringData?.title)}
             </h2>
+
+            {page.data.mindfulPrompt && (
+              <p className="text-[10px] font-serif italic text-slate-500 max-w-md mx-auto mt-0.5 line-clamp-1">
+                "{page.data.mindfulPrompt}"
+              </p>
+            )}
           </div>
 
           {/* Main Puzzle Area */}
-          <div className="flex-1 flex items-center justify-center py-2 overflow-hidden">
-            {page.type === 'sudoku' && (
+          <div className="flex-1 flex items-center justify-center py-1 overflow-hidden">
+            {page.type === 'sudoku' && sudokuData && (
               <div className="w-full max-w-[420px] flex flex-col items-center">
-                <div className="grid grid-cols-9 border-2 border-black bg-white shadow-sm">
-                  {(showSolution ? page.data.solution : page.data.grid).map((row, r) =>
-                    row.map((val, c) => {
-                      const isBorderR = (r + 1) % 3 === 0 && r !== 8;
-                      const isBorderC = (c + 1) % 3 === 0 && c !== 8;
-                      const wasOriginal = page.data.grid[r][c] !== 0;
+                {(() => {
+                  const size = sudokuData.grid.length;
+                  const boxR = size === 4 ? 2 : size === 6 ? 2 : 3;
+                  const boxC = size === 4 ? 2 : size === 6 ? 3 : 3;
+                  const cellPx = size === 4 ? 54 : size === 6 ? 42 : 36;
 
-                      return (
-                        <div
-                          key={`${r}-${c}`}
-                          className={`w-[38px] h-[38px] flex items-center justify-center font-bold text-base border-r border-b border-slate-300 ${
-                            isBorderR ? 'border-b-2 border-b-black' : ''
-                          } ${isBorderC ? 'border-r-2 border-r-black' : ''} ${
-                            showSolution && !wasOriginal ? 'text-indigo-600 bg-indigo-50/50' : 'text-slate-900'
-                          }`}
-                        >
-                          {val !== 0 ? val : ''}
-                        </div>
-                      );
-                    })
-                  )}
+                  return (
+                    <div
+                      className="grid border-2 border-slate-950 bg-white shadow-2xs"
+                      style={{
+                        gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`,
+                      }}
+                    >
+                      {(showSolution ? sudokuData.solution : sudokuData.grid).map((row, r) =>
+                        row.map((val, c) => {
+                          const isBorderR = (r + 1) % boxR === 0 && r !== size - 1;
+                          const isBorderC = (c + 1) % boxC === 0 && c !== size - 1;
+                          const wasOriginal = sudokuData.grid[r][c] !== 0;
+
+                          return (
+                            <div
+                              key={`${r}-${c}`}
+                              style={{ width: `${cellPx}px`, height: `${cellPx}px` }}
+                              className={`flex items-center justify-center font-serif font-bold ${
+                                size <= 6 ? 'text-xl' : 'text-base'
+                              } border-r border-b border-slate-200 ${
+                                isBorderR ? 'border-b-2 border-b-slate-950' : ''
+                              } ${isBorderC ? 'border-r-2 border-r-slate-950' : ''} ${
+                                showSolution && !wasOriginal ? 'text-indigo-600 bg-indigo-50/50 font-sans' : 'text-slate-900'
+                              }`}
+                            >
+                              {val !== 0 ? val : ''}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  );
+                })()}
+                <div className="flex items-center gap-2 mt-3 text-[10px] text-slate-400 font-serif italic">
+                  <span>Level: {page.difficulty} ({page.difficultyTier}/3)</span>
+                  <span>•</span>
+                  <span>{sudokuData.grid.length}x{sudokuData.grid.length} Board</span>
                 </div>
-                <p className="text-[11px] text-slate-400 italic text-center mt-4">
-                  Fill each row, column, and 3x3 box with numbers 1 through 9.
-                </p>
               </div>
             )}
 
-            {page.type === 'wordsearch' && (
+            {page.type === 'wordsearch' && wordSearchData && (
               <div className="w-full flex flex-col items-center">
-                {/* Word Search Letter Grid */}
                 <div
-                  className="grid border border-slate-800 bg-slate-50/50 p-2 rounded-sm"
+                  className="grid border border-slate-900 bg-slate-50/40 p-2 rounded-xs"
                   style={{
-                    gridTemplateColumns: `repeat(${page.data.gridSize}, minmax(0, 1fr))`,
+                    gridTemplateColumns: `repeat(${wordSearchData.gridSize}, minmax(0, 1fr))`,
                   }}
                 >
-                  {page.data.grid.map((row, r) =>
+                  {wordSearchData.grid.map((row, r) =>
                     row.map((char, c) => {
-                      // Check if cell is part of solution
                       const isSolutionCell =
                         showSolution &&
-                        page.data.placements.some((p) =>
+                        wordSearchData.placements.some((p) =>
                           p.cells.some(([pr, pc]) => pr === r && pc === c)
                         );
 
                       return (
                         <div
                           key={`${r}-${c}`}
-                          className={`w-6 h-6 flex items-center justify-center font-mono font-bold text-xs select-none transition-colors ${
+                          className={`w-[22px] h-[22px] flex items-center justify-center font-mono font-bold text-[11px] select-none ${
                             isSolutionCell
-                              ? 'bg-amber-300 text-slate-900 rounded-sm font-black ring-1 ring-amber-500'
+                              ? 'bg-amber-200 text-slate-950 rounded-xs ring-1 ring-amber-400 font-black'
                               : 'text-slate-800'
                           }`}
                         >
@@ -231,15 +302,14 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
                   )}
                 </div>
 
-                {/* Words to Find Checklist */}
-                <div className="mt-4 w-full">
-                  <p className="text-xs font-bold text-slate-700 uppercase tracking-wider text-center mb-1.5">
-                    Words to Find ({page.data.words.length})
+                <div className="mt-3.5 w-full max-w-[420px]">
+                  <p className="text-[10px] font-serif font-bold text-slate-700 tracking-wider text-center uppercase mb-1.5">
+                    Words to Discover ({wordSearchData.words.length})
                   </p>
-                  <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-[11px] text-slate-700 px-4">
-                    {page.data.words.map((word, idx) => (
+                  <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-[10.5px] text-slate-800 px-3">
+                    {wordSearchData.words.map((word, idx) => (
                       <div key={idx} className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 border border-slate-400 rounded-xs inline-block" />
+                        <span className="w-2.5 h-2.5 border border-slate-300 rounded-2xs inline-block" />
                         <span className="font-medium tracking-wide">{word}</span>
                       </div>
                     ))}
@@ -248,34 +318,32 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
               </div>
             )}
 
-            {page.type === 'maze' && (
+            {page.type === 'maze' && mazeData && (
               <div className="w-full flex flex-col items-center">
                 <div className="relative">
-                  {/* Start Indicator */}
-                  <div className="absolute -top-5 left-1 text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                  <div className="absolute -top-4 left-1 text-[9px] font-serif font-bold text-emerald-700 flex items-center gap-1">
                     <span>START ▼</span>
                   </div>
 
-                  {/* Maze Grid */}
                   <div
-                    className="grid border-2 border-black bg-white"
+                    className="grid border-2 border-slate-950 bg-white"
                     style={{
-                      gridTemplateColumns: `repeat(${page.data.width}, minmax(0, 1fr))`,
+                      gridTemplateColumns: `repeat(${mazeData.width}, minmax(0, 1fr))`,
                     }}
                   >
-                    {page.data.grid.map((row, r) =>
+                    {mazeData.grid.map((row, r) =>
                       row.map((cell, c) => {
                         const isWall = cell === 1;
                         const isPath =
                           showSolution &&
-                          page.data.solutionPath.some(([pr, pc]) => pr === r && pc === c);
+                          mazeData.solutionPath.some(([pr, pc]) => pr === r && pc === c);
 
                         return (
                           <div
                             key={`${r}-${c}`}
-                            className={`w-3.5 h-3.5 ${
+                            className={`w-[12px] h-[12px] ${
                               isWall
-                                ? 'bg-black'
+                                ? 'bg-slate-950'
                                 : isPath
                                 ? 'bg-rose-500 rounded-full scale-75'
                                 : 'bg-white'
@@ -286,79 +354,47 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
                     )}
                   </div>
 
-                  {/* Finish Indicator */}
-                  <div className="absolute -bottom-5 right-1 text-[10px] font-bold text-rose-600 flex items-center gap-1">
+                  <div className="absolute -bottom-4 right-1 text-[9px] font-serif font-bold text-rose-700 flex items-center gap-1">
                     <span>▲ FINISH</span>
                   </div>
                 </div>
 
-                <p className="text-[11px] text-slate-400 italic text-center mt-7">
-                  Navigate from START to FINISH without crossing the black walls.
+                <p className="text-[10px] text-slate-400 font-serif italic text-center mt-6">
+                  Level {page.difficultyTier}/3 ({page.difficulty}) • Follow the labyrinth with calm awareness
                 </p>
               </div>
             )}
 
-            {page.type === 'coloring' && (
+            {page.type === 'coloring' && coloringData && (
               <div className="w-full h-full flex flex-col items-center justify-center relative">
-                {page.data.aiImageUrl ? (
-                  <div className="relative group max-h-[460px] flex items-center justify-center">
+                {coloringData.aiImageUrl ? (
+                  <div className="relative group max-h-[440px] flex items-center justify-center">
                     <img
-                      src={page.data.aiImageUrl}
-                      alt={page.data.title}
-                      className="max-h-[460px] object-contain border border-slate-200 shadow-sm rounded-sm"
+                      src={coloringData.aiImageUrl}
+                      alt={coloringData.title}
+                      className="max-h-[440px] object-contain border border-slate-100 shadow-xs rounded-xs"
                     />
-                    <div className="absolute bottom-2 right-2 bg-black/70 text-white text-[10px] px-2 py-0.5 rounded backdrop-blur">
-                      Gemini 3.1 AI Line Art
-                    </div>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center">
                     <canvas
                       ref={mandalaCanvasRef}
-                      width={1200}
-                      height={1200}
-                      className="w-[420px] h-[420px] object-contain border border-slate-100 rounded-sm"
+                      width={1400}
+                      height={1400}
+                      className="w-[410px] h-[410px] object-contain rounded-xs"
                     />
-                    <p className="text-[10px] text-slate-400 mt-2 font-mono tracking-wide uppercase">
-                      Algorithmic Vector Mandala • Style: {page.data.style}
-                    </p>
-                  </div>
-                )}
-
-                {/* AI Line Art Generator Overlay / Trigger */}
-                {onGenerateAiArt && (
-                  <div className="mt-3 flex items-center gap-2">
-                    <button
-                      onClick={() =>
-                        onGenerateAiArt(
-                          page.pageIndex,
-                          page.data.promptDescription || `${themeName} coloring page line art`
-                        )
-                      }
-                      disabled={isGeneratingArt}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 shadow-sm disabled:opacity-50"
-                    >
-                      {isGeneratingArt ? (
-                        <>
-                          <RefreshCw size={13} className="animate-spin" />
-                          Generating with Gemini AI...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles size={13} />
-                          {page.data.aiImageUrl ? 'Regenerate AI Line Art' : 'Generate AI Line Art with Gemini'}
-                        </>
-                      )}
-                    </button>
+                    <span className="text-[10px] font-mono text-slate-400 mt-2">
+                      Difficulty Level {page.difficultyTier}/3 ({page.difficulty})
+                    </span>
                   </div>
                 )}
               </div>
             )}
           </div>
 
-          {/* Page Footer */}
-          <div className="text-center border-t border-slate-100 pt-1.5">
-            <span className="text-xs font-serif text-slate-500">- {pageNumber} -</span>
+          {/* Discreet Running Page Number Footer */}
+          <div className="text-center pt-1.5 border-t border-slate-100">
+            <span className="text-xs font-serif font-bold text-slate-700">- {pageNumber} -</span>
           </div>
         </div>
       </div>

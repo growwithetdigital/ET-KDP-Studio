@@ -31,7 +31,7 @@ const getAiClient = () => {
 // API: Generate Themed Word Search Vocabularies & Book Metadata
 app.post('/api/ai/theme-enrichment', async (req, res) => {
   try {
-    const { theme = 'Marvel Superheroes' } = req.body;
+    const { theme = 'Dog Lovers', audience = 'adults' } = req.body;
     const ai = getAiClient();
 
     if (!ai) {
@@ -41,19 +41,27 @@ app.post('/api/ai/theme-enrichment', async (req, res) => {
       });
     }
 
-    const prompt = `You are a professional Amazon KDP Puzzle and Activity Book publishing expert.
-The user wants to publish a 100-page Activity Book on Amazon KDP with the theme: "${theme}".
+    const audienceGuidelines =
+      audience === 'kids'
+        ? 'Target Audience: Kids Ages 4–8. Words should be accessible, length 3 to 7 letters, positive, fun. Coloring prompts must feature big bold vehicles/animals with thick lines. Title should highlight "Kids Ages 4-8" and "Fun Activities".'
+        : audience === 'seniors'
+        ? 'Target Audience: Seniors & Older Adults (Large Print). Words should evoke warmth, nostalgia, relaxation, and cognitive sharpness. Highlight "Large Print" and "Memory Brain Games" in Title.'
+        : 'Target Audience: Adults & Teens. Hyper-specific niche focus (e.g. Dog Lovers, Botanical Calm, etc.) avoiding generic titles. Focus on stress relief and engaging puzzles.';
+
+    const prompt = `You are a professional Amazon KDP Puzzle and Activity Book publishing expert specializing in bestseller sub-niches.
+The user wants to publish an Activity Book on Amazon KDP targeting the niche: "${theme}".
+${audienceGuidelines}
 
 Generate the following in JSON format:
-1. "title": Catchy Amazon bestseller title (e.g. "The Ultimate Marvel Activity Book: 100 Epic Puzzles & Coloring Pages")
-2. "subtitle": High-converting KDP subtitle with keywords (e.g. "Word Searches, Sudoku, Mazes and Relaxing Coloring Art for Kids, Teens and Adults")
-3. "kdpKeywords": Array of 7 Amazon KDP backend search keywords (each under 50 characters, no punctuation, high buyer search volume)
+1. "title": Catchy, hyper-specific Amazon bestseller title avoiding generic names (e.g. "The Dog Lovers Word Search & Puzzle Book" or "Construction Vehicle Activity Book for Kids Ages 4–8" or "Large Print Brain Games for Seniors")
+2. "subtitle": High-converting KDP subtitle packed with customer search terms
+3. "kdpKeywords": Array of 7 Amazon KDP backend search keywords (each under 50 characters, high search volume, no punctuation)
 4. "kdpCategories": Array of 2 optimal Amazon book categories
-5. "kdpDescription": Compelling KDP book description formatted with clean HTML tags like <b>, <h3>, <ul>, <li>. Highlight that it has 100 non-repeating puzzles (25 Sudoku, 25 Word Searches, 25 Mazes, 25 Coloring pages) with complete solutions included, large 8.5x11 inch format.
-6. "wordSearchSets": An array of exactly 25 themed word search puzzle lists. Each item must have:
-   - "title": Sub-theme title (e.g., "Avenger Heroes", "Cosmic Powers", "Villain Lair", "Vibranium Tech", etc.)
-   - "words": Array of 8 to 12 uppercase single-word keywords (length 3 to 10 letters, no spaces, no special characters, e.g. ["THOR", "HULK", "IRONMAN", "SHIELD", "AVENGERS", "HAMMER", "VISION", "FALCON", "QUANTUM"])
-7. "coloringPrompts": An array of 25 distinct descriptive prompts for coloring book pages based on "${theme}" (e.g. "Powerful superhero standing on a city rooftop at sunset, dramatic action pose, bold clean comic book line art").
+5. "kdpDescription": Compelling KDP book description formatted with clean HTML tags (<b>, <h3>, <ul>, <li>). Emphasize that all puzzles have guaranteed matching solution keys included at the back, 8.5x11 format.
+6. "wordSearchSets": An array of 25 themed word search puzzle lists. Each item must have:
+   - "title": Sub-theme title
+   - "words": Array of 8 to 12 uppercase single-word keywords (no spaces or hyphens)
+7. "coloringPrompts": An array of 25 distinct descriptive prompts for coloring book pages matching the "${theme}" niche.
 
 Respond strictly with valid JSON conforming to this structure without markdown code blocks.`;
 
