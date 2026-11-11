@@ -1,0 +1,6 @@
+{
+  "name": "VibeBook Forge Studio",
+  "description": "KDP Activity Book Generator Platform to create complete 100-page interior PDFs (Sudoku, Word Searches, Mazes, and Mandalas/Coloring Pages) with bleed margins and Gemini AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

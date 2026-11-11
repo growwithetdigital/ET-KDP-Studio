@@ -1,0 +1,164 @@
+import express from 'express';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { GoogleGenAI } from '@google/genai';
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const isProd = process.env.NODE_ENV === 'production';
+const PORT = Number(process.env.PORT) || 3000;
+
+const app = express();
+app.use(express.json({ limit: '15mb' }));
+
+// Initialize GoogleGenAI client on server
+const getAiClient = () => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
+};
+
+// API: Generate Themed Word Search Vocabularies & Book Metadata
+app.post('/api/ai/theme-enrichment', async (req, res) => {
+  try {
+    const { theme = 'Marvel Superheroes' } = req.body;
+    const ai = getAiClient();
+
+    if (!ai) {
+      return res.status(200).json({
+        fallback: true,
+        message: 'No GEMINI_API_KEY detected. Using high-grade algorithmic generators.',
+      });
+    }
+
+    const prompt = `You are a professional Amazon KDP Puzzle and Activity Book publishing expert.
+The user wants to publish a 100-page Activity Book on Amazon KDP with the theme: "${theme}".
+
+Generate the following in JSON format:
+1. "title": Catchy Amazon bestseller title (e.g. "The Ultimate Marvel Activity Book: 100 Epic Puzzles & Coloring Pages")
+2. "subtitle": High-converting KDP subtitle with keywords (e.g. "Word Searches, Sudoku, Mazes and Relaxing Coloring Art for Kids, Teens and Adults")
+3. "kdpKeywords": Array of 7 Amazon KDP backend search keywords (each under 50 characters, no punctuation, high buyer search volume)
+4. "kdpCategories": Array of 2 optimal Amazon book categories
+5. "kdpDescription": Compelling KDP book description formatted with clean HTML tags like <b>, <h3>, <ul>, <li>. Highlight that it has 100 non-repeating puzzles (25 Sudoku, 25 Word Searches, 25 Mazes, 25 Coloring pages) with complete solutions included, large 8.5x11 inch format.
+6. "wordSearchSets": An array of exactly 25 themed word search puzzle lists. Each item must have:
+   - "title": Sub-theme title (e.g., "Avenger Heroes", "Cosmic Powers", "Villain Lair", "Vibranium Tech", etc.)
+   - "words": Array of 8 to 12 uppercase single-word keywords (length 3 to 10 letters, no spaces, no special characters, e.g. ["THOR", "HULK", "IRONMAN", "SHIELD", "AVENGERS", "HAMMER", "VISION", "FALCON", "QUANTUM"])
+7. "coloringPrompts": An array of 25 distinct descriptive prompts for coloring book pages based on "${theme}" (e.g. "Powerful superhero standing on a city rooftop at sunset, dramatic action pose, bold clean comic book line art").
+
+Respond strictly with valid JSON conforming to this structure without markdown code blocks.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+      },
+    });
+
+    const text = response.text || '{}';
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      // Clean up markdown block if present
+      const cleaned = text.replace(/```json\n?|```/g, '').trim();
+      data = JSON.parse(cleaned);
+    }
+
+    return res.json({ success: true, data });
+  } catch (error: any) {
+    console.error('Error generating theme enrichment:', error);
+    return res.status(500).json({
+      error: error?.message || 'Failed to generate theme enrichment',
+    });
+  }
+});
+
+// API: Generate Coloring Book Line Art Image
+app.post('/api/ai/coloring-page', async (req, res) => {
+  try {
+    const { prompt = 'A superhero in action', theme = 'Superhero' } = req.body;
+    const ai = getAiClient();
+
+    if (!ai) {
+      return res.status(400).json({
+        error: 'GEMINI_API_KEY is not configured in environment secrets.',
+      });
+    }
+
+    const enhancedPrompt = `Clean black and white coloring book page line art, adult and kids coloring book style, theme: ${theme}. Subject: ${prompt}. Pure white background, high contrast, clean vector style bold outlines, no grayscale shading, no colored pixels, no dithering, printable 300 DPI coloring page interior for Amazon KDP book.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.1-flash-lite-image',
+      contents: {
+        parts: [{ text: enhancedPrompt }],
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: '3:4',
+        },
+      },
+    });
+
+    let imageUrl = '';
+    for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+      if (part.inlineData?.data) {
+        const mime = part.inlineData.mimeType ?? 'image/png';
+        imageUrl = `data:${mime};base64,${part.inlineData.data}`;
+        break;
+      }
+    }
+
+    if (!imageUrl) {
+      return res.status(500).json({ error: 'No image was generated by model' });
+    }
+
+    return res.json({ success: true, imageUrl });
+  } catch (error: any) {
+    console.error('Error generating coloring art:', error);
+    return res.status(500).json({
+      error: error?.message || 'Failed to generate coloring art image',
+    });
+  }
+});
+
+// Health check endpoint
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+  });
+});
+
+// Setup Vite or Static File Serving
+async function startServer() {
+  if (!isProd) {
+    const { createServer } = await import('vite');
+    const vite = await createServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    app.use(express.static(path.resolve(__dirname, 'dist')));
+    app.get('*', (_req, res) => {
+      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+    });
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`VibeBook Forge Studio server running on port ${PORT} (prod=${isProd})`);
+  });
+}
+
+startServer();
