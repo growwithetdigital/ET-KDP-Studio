@@ -127,7 +127,7 @@ export const SectionComposer: React.FC<SectionComposerProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Add, combine, and arrange custom puzzle sections into a unified print-ready book
+            Add, combine, and arrange custom puzzle sections into a unified deluxe activity book
           </p>
         </div>
 

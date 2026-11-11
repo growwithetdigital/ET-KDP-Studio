@@ -33,9 +33,9 @@ export const MetadataExportModal: React.FC<MetadataExportModalProps> = ({
               <Tag className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">Amazon KDP Listing Metadata</h2>
+              <h2 className="text-base font-bold text-slate-900">Book Listing & Search Metadata</h2>
               <p className="text-xs text-slate-500">
-                SEO-optimized title, subtitle, 7 backend keywords & HTML description
+                SEO-optimized title, subtitle, 7 high-ranking search keywords & HTML description
               </p>
             </div>
           </div>
@@ -83,11 +83,11 @@ export const MetadataExportModal: React.FC<MetadataExportModalProps> = ({
             </div>
           </div>
 
-          {/* 7 Amazon KDP Backend Keywords */}
+          {/* 7 Targeted Search Keywords */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="font-semibold text-slate-800">
-                7 Amazon KDP Backend Search Keywords
+                7 Targeted Search & Discovery Keywords
               </span>
               <button
                 onClick={() => copyToClipboard(theme.kdpKeywords.join(', '), 'all-keywords')}

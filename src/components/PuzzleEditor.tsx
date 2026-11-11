@@ -42,19 +42,23 @@ export const PuzzleEditor: React.FC<PuzzleEditorProps> = ({
   isGeneratingArt = false,
 }) => {
   if (!isOpen || !page) return null;
+  if (page.type === 'cover' || page.type === 'toc' || page.type === 'foreword') return null;
+
+  const puzzleData = page.data as SudokuPuzzle | WordSearchPuzzle | MazePuzzle | MandalaPuzzle;
 
   // Local state for editing
   const [customTitle, setCustomTitle] = useState(
-    page.type === 'sudoku'
-      ? page.data.title || `Sudoku #${page.data.puzzleNumber}`
-      : page.type === 'wordsearch'
-      ? page.data.title || `Word Search #${page.data.puzzleNumber}`
-      : page.type === 'maze'
-      ? page.data.title || `Maze #${page.data.puzzleNumber}`
-      : page.data.title || `Coloring Art #${page.data.puzzleNumber}`
+    puzzleData.title ||
+      (page.type === 'sudoku'
+        ? `Sudoku #${(puzzleData as SudokuPuzzle).puzzleNumber}`
+        : page.type === 'wordsearch'
+        ? `Word Search #${(puzzleData as WordSearchPuzzle).puzzleNumber}`
+        : page.type === 'maze'
+        ? `Maze #${(puzzleData as MazePuzzle).puzzleNumber}`
+        : `Coloring Art #${(puzzleData as MandalaPuzzle).puzzleNumber}`)
   );
 
-  const [mindfulPrompt, setMindfulPrompt] = useState(page.data.mindfulPrompt || '');
+  const [mindfulPrompt, setMindfulPrompt] = useState(puzzleData.mindfulPrompt || '');
 
   // Sudoku state
   const [sudokuDifficulty, setSudokuDifficulty] = useState<DifficultyLevel>(
@@ -88,9 +92,10 @@ export const PuzzleEditor: React.FC<PuzzleEditorProps> = ({
   // Re-generate current Sudoku with selected difficulty
   const handleRegenerateSudoku = () => {
     if (page.type !== 'sudoku') return;
+    const sdk = page.data as SudokuPuzzle;
     const tier: 1 | 2 | 3 = sudokuDifficulty === 'Easy' ? 1 : sudokuDifficulty === 'Medium' ? 2 : 3;
     const newSudoku = generateSudoku(
-      page.data.puzzleNumber,
+      sdk.puzzleNumber,
       Date.now(),
       sudokuDifficulty
     );

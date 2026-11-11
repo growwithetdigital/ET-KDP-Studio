@@ -6,6 +6,10 @@ import {
   WordSearchPuzzle,
   MazePuzzle,
   MandalaPuzzle,
+  FrontPageData,
+  TocData,
+  ForewordData,
+  SectionDividerData,
 } from '../types';
 import { drawMandalaToCanvas } from '../generators/mandala';
 
@@ -21,7 +25,8 @@ export async function exportBookToPdf(
   themeName: string,
   sectionTitle = 'Activity Book',
   includeSolutions = true,
-  onProgress?: (progress: ExportProgress) => void
+  onProgress?: (progress: ExportProgress) => void,
+  isInteractiveDigital = false
 ): Promise<Blob> {
   const baseWidthInches = 8.5;
   const baseHeightInches = 11.0;
@@ -72,81 +77,142 @@ export async function exportBookToPdf(
     // Elegant Editorial Header
     const titleX = leftMargin + contentWidth / 2;
 
-    // Running Header Bar: Theme & Section on Left, Difficulty Tier on Right
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(140, 140, 140);
-    const headerLeft = `${themeName.toUpperCase()} • ${page.sectionTitle.toUpperCase()}`;
-    doc.text(headerLeft, leftMargin, topMargin - 18);
+    if (page.type === 'cover') {
+      renderCoverPageToPdf(
+        doc,
+        page.data as FrontPageData,
+        leftMargin,
+        topMargin,
+        contentWidth,
+        contentHeight,
+        titleX
+      );
+    } else if (page.type === 'toc') {
+      renderTocPageToPdf(
+        doc,
+        page.data as TocData,
+        leftMargin,
+        topMargin,
+        contentWidth,
+        contentHeight,
+        titleX,
+        isInteractiveDigital
+      );
+    } else if (page.type === 'foreword') {
+      renderForewordPageToPdf(
+        doc,
+        page.data as ForewordData,
+        leftMargin,
+        topMargin,
+        contentWidth,
+        contentHeight,
+        titleX
+      );
+    } else if (page.type === 'section-divider') {
+      renderSectionDividerPageToPdf(
+        doc,
+        page.data as SectionDividerData,
+        leftMargin,
+        topMargin,
+        contentWidth,
+        contentHeight,
+        titleX,
+        themeName
+      );
+    } else {
+      // Running Header Bar: Theme & Section on Left, Difficulty Tier on Right
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(140, 140, 140);
+      const headerLeft = `${themeName.toUpperCase()} • ${page.sectionTitle.toUpperCase()}`;
+      doc.text(headerLeft, leftMargin, topMargin - 18);
 
-    const diffBadge = `DIFF: ${page.difficulty.toUpperCase()} (${page.difficultyTier}/3)`;
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(page.difficulty === 'Easy' ? 40 : page.difficulty === 'Medium' ? 140 : 180, 50, 50);
-    doc.text(diffBadge, leftMargin + contentWidth, topMargin - 18, { align: 'right' });
+      if (page.difficulty && page.difficultyTier) {
+        const diffBadge = `DIFF: ${page.difficulty.toUpperCase()} (${page.difficultyTier}/3)`;
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(page.difficulty === 'Easy' ? 40 : page.difficulty === 'Medium' ? 140 : 180, 50, 50);
+        doc.text(diffBadge, leftMargin + contentWidth, topMargin - 18, { align: 'right' });
+      }
 
-    // Page Title
-    doc.setFont('times', 'bold');
-    doc.setFontSize(16);
-    doc.setTextColor(25, 25, 25);
-    const displayTitle = page.data.title || `${page.type.toUpperCase()} #${page.data.puzzleNumber}`;
-    doc.text(displayTitle, titleX, topMargin - 4, { align: 'center' });
+      // Interactive link to jump to solutions appendix on digital mode
+      if (isInteractiveDigital && includeSolutions) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(79, 70, 229);
+        const linkText = 'Tap to View Solution Key »';
+        doc.text(linkText, leftMargin + contentWidth, topMargin - 6, { align: 'right' });
+        doc.link(leftMargin + contentWidth - 120, topMargin - 16, 120, 14, {
+          pageNumber: totalPages + 1,
+        });
+      }
 
-    // Mindful Prompt Subtitle
-    if (page.data.mindfulPrompt) {
-      doc.setFont('times', 'italic');
-      doc.setFontSize(9);
+      // Page Title
+      doc.setFont('times', 'bold');
+      doc.setFontSize(16);
+      doc.setTextColor(25, 25, 25);
+      const displayTitle =
+        (page.data as any).title || `${page.type.toUpperCase()} #${(page.data as any).puzzleNumber}`;
+      doc.text(displayTitle, titleX, topMargin - 4, { align: 'center' });
+
+      // Mindful Prompt Subtitle
+      if ((page.data as any).mindfulPrompt) {
+        doc.setFont('times', 'italic');
+        doc.setFontSize(9);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`"${(page.data as any).mindfulPrompt}"`, titleX, topMargin + 9, { align: 'center' });
+      }
+
+      // Render puzzle geometry
+      if (page.type === 'sudoku') {
+        const sData = page.data as any;
+        renderSudokuToPdf(doc, sData.grid, leftMargin, topMargin + 12, contentWidth, contentHeight - 12);
+      } else if (page.type === 'wordsearch') {
+        const wsData = page.data as any;
+        renderWordSearchToPdf(
+          doc,
+          wsData.grid,
+          wsData.words,
+          leftMargin,
+          topMargin + 12,
+          contentWidth,
+          contentHeight - 12
+        );
+      } else if (page.type === 'maze') {
+        const mData = page.data as any;
+        renderMazeToPdf(
+          doc,
+          mData.grid,
+          mData.start,
+          mData.finish,
+          leftMargin,
+          topMargin + 12,
+          contentWidth,
+          contentHeight - 12
+        );
+      } else if (page.type === 'coloring') {
+        await renderColoringToPdf(
+          doc,
+          page.data,
+          leftMargin,
+          topMargin + 12,
+          contentWidth,
+          contentHeight - 12
+        );
+      }
+    }
+
+    // Clean page number footer (omit for cover)
+    if (page.type !== 'cover') {
+      doc.setFont('times', 'normal');
+      doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
-      doc.text(`"${page.data.mindfulPrompt}"`, titleX, topMargin + 9, { align: 'center' });
-    }
-
-    // Render puzzle geometry
-    if (page.type === 'sudoku') {
-      const sData = page.data as any;
-      renderSudokuToPdf(doc, sData.grid, leftMargin, topMargin + 12, contentWidth, contentHeight - 12);
-    } else if (page.type === 'wordsearch') {
-      const wsData = page.data as any;
-      renderWordSearchToPdf(
-        doc,
-        wsData.grid,
-        wsData.words,
-        leftMargin,
-        topMargin + 12,
-        contentWidth,
-        contentHeight - 12
-      );
-    } else if (page.type === 'maze') {
-      const mData = page.data as any;
-      renderMazeToPdf(
-        doc,
-        mData.grid,
-        mData.start,
-        mData.finish,
-        leftMargin,
-        topMargin + 12,
-        contentWidth,
-        contentHeight - 12
-      );
-    } else if (page.type === 'coloring') {
-      await renderColoringToPdf(
-        doc,
-        page.data,
-        leftMargin,
-        topMargin + 12,
-        contentWidth,
-        contentHeight - 12
+      doc.text(
+        `- ${page.pageNumber} -`,
+        titleX,
+        pageHeight - (config.bleed ? bleedOffset : 0) - (safeMargin / 2),
+        { align: 'center' }
       );
     }
-
-    // Clean page number footer
-    doc.setFont('times', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text(
-      `- ${page.pageNumber} -`,
-      titleX,
-      pageHeight - (config.bleed ? bleedOffset : 0) - (safeMargin / 2),
-      { align: 'center' }
-    );
 
     if (i % 4 === 0) {
       await new Promise((r) => setTimeout(r, 10));
@@ -576,4 +642,342 @@ async function renderSolutionsAppendix(
       }
     });
   }
+}
+
+function renderCoverPageToPdf(
+  doc: jsPDF,
+  data: FrontPageData,
+  leftMargin: number,
+  topMargin: number,
+  contentWidth: number,
+  contentHeight: number,
+  titleX: number
+) {
+  // Classical double border
+  doc.setDrawColor(30, 30, 30);
+  doc.setLineWidth(2.5);
+  doc.rect(leftMargin, topMargin - 10, contentWidth, contentHeight + 15);
+
+  doc.setLineWidth(0.8);
+  doc.rect(leftMargin + 6, topMargin - 4, contentWidth - 12, contentHeight + 3);
+
+  // Top label
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(110, 110, 110);
+  doc.text('OFFICIAL ACTIVITY & MINDFULNESS GUIDE', titleX, topMargin + 30, { align: 'center' });
+
+  // Divider line
+  doc.setDrawColor(50, 50, 50);
+  doc.setLineWidth(1.2);
+  doc.line(titleX - 40, topMargin + 40, titleX + 40, topMargin + 40);
+
+  // Big Title
+  doc.setFont('times', 'bold');
+  doc.setFontSize(26);
+  doc.setTextColor(20, 20, 20);
+  const titleLines = doc.splitTextToSize((data.title || 'THE ACTIVITY BOOK').toUpperCase(), contentWidth - 40);
+  doc.text(titleLines, titleX, topMargin + 90, { align: 'center' });
+
+  // Subtitle
+  doc.setFont('times', 'italic');
+  doc.setFontSize(11.5);
+  doc.setTextColor(80, 80, 80);
+  const subLines = doc.splitTextToSize(data.subtitle || 'Puzzles & Coloring for Calm and Focus', contentWidth - 60);
+  doc.text(subLines, titleX, topMargin + 145, { align: 'center' });
+
+  // Center filigree divider
+  doc.setDrawColor(70, 70, 70);
+  doc.setLineWidth(0.8);
+  doc.line(titleX - 60, topMargin + 200, titleX + 60, topMargin + 200);
+  doc.setFont('times', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(30, 30, 30);
+  doc.text('100 NON-REPEATING CHALLENGES', titleX, topMargin + 215, { align: 'center' });
+  doc.line(titleX - 60, topMargin + 225, titleX + 60, topMargin + 225);
+
+  // 4 Features Box
+  const boxW = contentWidth - 60;
+  const boxX = leftMargin + 30;
+  const boxY = topMargin + 250;
+  doc.setFillColor(248, 248, 250);
+  doc.setDrawColor(210, 210, 215);
+  doc.roundedRect(boxX, boxY, boxW, 70, 3, 3, 'FD');
+
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(40, 40, 40);
+  doc.text('• Sudoku Logic Puzzles (Easy to Hard 1/3)', boxX + 15, boxY + 22);
+  doc.text('• Themed Word Searches (Curated Vocab)', boxX + 15, boxY + 38);
+  doc.text('• Labyrinth Mazes (3 Complexity Tiers)', boxX + boxW / 2 + 10, boxY + 22);
+  doc.text('• Mindful Coloring Art (Vector Motifs)', boxX + boxW / 2 + 10, boxY + 38);
+
+  doc.setFont('times', 'italic');
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 100, 100);
+  doc.text('Calibrated for Deep Focus, Stress Relief & Anxiety Decompression', titleX, boxY + 58, { align: 'center' });
+
+  // Bottom Publisher Note
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(50, 50, 50);
+  doc.text("OFFICIAL DELUXE COLLECTOR'S EDITION", titleX, topMargin + contentHeight - 35, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(110, 110, 110);
+  doc.text('Complete Verified Solutions Section Included at the Back', titleX, topMargin + contentHeight - 22, { align: 'center' });
+}
+
+function renderSectionDividerPageToPdf(
+  doc: jsPDF,
+  data: SectionDividerData,
+  leftMargin: number,
+  topMargin: number,
+  contentWidth: number,
+  contentHeight: number,
+  titleX: number,
+  themeName: string
+) {
+  // Classical double border
+  doc.setDrawColor(40, 40, 40);
+  doc.setLineWidth(1.8);
+  doc.rect(leftMargin + 10, topMargin, contentWidth - 20, contentHeight);
+
+  doc.setLineWidth(0.6);
+  doc.rect(leftMargin + 14, topMargin + 4, contentWidth - 28, contentHeight - 8);
+
+  // Part Number
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(110, 110, 110);
+  doc.text(data.partNumber, titleX, topMargin + 45, { align: 'center' });
+
+  doc.setDrawColor(60, 60, 60);
+  doc.setLineWidth(1.2);
+  doc.line(titleX - 30, topMargin + 53, titleX + 30, topMargin + 53);
+
+  // Section Title
+  doc.setFont('times', 'bold');
+  doc.setFontSize(22);
+  doc.setTextColor(20, 20, 20);
+  doc.text(data.title.toUpperCase(), titleX, topMargin + 95, { align: 'center' });
+
+  // Subtitle
+  doc.setFont('times', 'italic');
+  doc.setFontSize(11);
+  doc.setTextColor(80, 80, 80);
+  doc.text(data.subtitle, titleX, topMargin + 118, { align: 'center' });
+
+  // Famous Quote Box
+  const quoteBoxW = contentWidth - 60;
+  const quoteBoxX = leftMargin + 30;
+  const quoteBoxY = topMargin + 150;
+
+  doc.setFillColor(248, 248, 250);
+  doc.setDrawColor(215, 215, 220);
+  doc.roundedRect(quoteBoxX, quoteBoxY, quoteBoxW, 90, 3, 3, 'FD');
+
+  doc.setFont('times', 'italic');
+  doc.setFontSize(11);
+  doc.setTextColor(30, 30, 30);
+  const quoteLines = doc.splitTextToSize(`“${data.quote.text}”`, quoteBoxW - 30);
+  doc.text(quoteLines, quoteBoxX + 15, quoteBoxY + 30);
+
+  doc.setFont('times', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(20, 20, 20);
+  const authorText = `— ${data.quote.author}`;
+  doc.text(authorText, quoteBoxX + quoteBoxW - 15, quoteBoxY + 66, { align: 'right' });
+
+  if (data.quote.sourceOrRole) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(120, 120, 120);
+    doc.text(data.quote.sourceOrRole, quoteBoxX + quoteBoxW - 15, quoteBoxY + 78, { align: 'right' });
+  }
+
+  // Curated Description
+  doc.setFont('times', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(50, 50, 50);
+  const descLines = doc.splitTextToSize(data.curatedDescription, contentWidth - 80);
+  doc.text(descLines, titleX, topMargin + 275, { align: 'center' });
+
+  // Stats badge
+  doc.setFillColor(242, 242, 245);
+  doc.setDrawColor(200, 200, 205);
+  const badgeW = 220;
+  doc.roundedRect(titleX - badgeW / 2, topMargin + 355, badgeW, 24, 12, 12, 'FD');
+
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(50, 50, 50);
+  doc.text(`${data.totalSectionPages} Pages • ${data.difficultySummary}`, titleX, topMargin + 370, { align: 'center' });
+
+  // Bottom Collection Tag
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(140, 140, 140);
+  doc.text(`${themeName.toUpperCase()} COLLECTION`, titleX, topMargin + contentHeight - 25, { align: 'center' });
+}
+
+function renderTocPageToPdf(
+  doc: jsPDF,
+  data: TocData,
+  leftMargin: number,
+  topMargin: number,
+  contentWidth: number,
+  contentHeight: number,
+  titleX: number,
+  isInteractiveDigital = false
+) {
+  doc.setFont('times', 'bold');
+  doc.setFontSize(22);
+  doc.setTextColor(20, 20, 20);
+  doc.text('TABLE OF CONTENTS', titleX, topMargin + 10, { align: 'center' });
+
+  doc.setFont('times', 'italic');
+  doc.setFontSize(10.5);
+  doc.setTextColor(100, 100, 100);
+  doc.text('Your structured journey through quiet focus, flow, and anxiety relief', titleX, topMargin + 28, { align: 'center' });
+
+  doc.setDrawColor(60, 60, 60);
+  doc.setLineWidth(0.8);
+  doc.line(leftMargin + 30, topMargin + 38, leftMargin + contentWidth - 30, topMargin + 38);
+
+  let curY = topMargin + 70;
+  (data.entries || []).forEach((entry) => {
+    doc.setFont('times', 'bold');
+    doc.setFontSize(11.5);
+    doc.setTextColor(30, 30, 30);
+    doc.text(entry.title, leftMargin + 20, curY);
+
+    const pageNumText = `Page ${entry.startPage}`;
+    doc.setFont('times', 'bold');
+    doc.setFontSize(11);
+    doc.text(pageNumText, leftMargin + contentWidth - 20, curY, { align: 'right' });
+
+    // Dotted leader line
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(160, 160, 160);
+    const titleWidth = doc.getTextWidth(entry.title) + 8;
+    const pageNumWidth = doc.getTextWidth(pageNumText) + 8;
+    const dotStartX = leftMargin + 20 + titleWidth;
+    const dotEndX = leftMargin + contentWidth - 20 - pageNumWidth;
+
+    if (dotEndX > dotStartX) {
+      let dots = '';
+      while (doc.getTextWidth(dots + ' .') < dotEndX - dotStartX) {
+        dots += ' .';
+      }
+      doc.text(dots, dotStartX, curY);
+    }
+
+    // Subtitle
+    if (entry.subtitle) {
+      doc.setFont('times', 'italic');
+      doc.setFontSize(9);
+      doc.setTextColor(110, 110, 110);
+      doc.text(entry.subtitle, leftMargin + 20, curY + 12);
+    }
+
+    // Interactive digital link for tablets & offline reading
+    if (isInteractiveDigital && entry.startPage) {
+      doc.link(leftMargin + 15, curY - 10, contentWidth - 30, 20, {
+        pageNumber: entry.startPage,
+      });
+    }
+
+    curY += 34;
+  });
+
+  doc.setFont('times', 'italic');
+  doc.setFontSize(8.5);
+  doc.setTextColor(120, 120, 120);
+  doc.text(
+    isInteractiveDigital
+      ? 'Interactive Digital Edition • Tap any table of contents row to jump directly to that section.'
+      : 'All puzzle sections are preceded by curated divider pages with famous inspiring quotes.',
+    titleX,
+    topMargin + contentHeight - 15,
+    { align: 'center' }
+  );
+}
+
+function renderForewordPageToPdf(
+  doc: jsPDF,
+  data: ForewordData,
+  leftMargin: number,
+  topMargin: number,
+  contentWidth: number,
+  contentHeight: number,
+  titleX: number
+) {
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(140, 140, 140);
+  doc.text('FOREWORD • THE PURPOSE OF THIS ACTIVITY GUIDE', titleX, topMargin - 10, { align: 'center' });
+
+  doc.setFont('times', 'bold');
+  doc.setFontSize(18);
+  doc.setTextColor(20, 20, 20);
+  doc.text(data.title || 'The Architecture of Calm', titleX, topMargin + 10, { align: 'center' });
+
+  doc.setFont('times', 'italic');
+  doc.setFontSize(10);
+  doc.setTextColor(90, 90, 90);
+  doc.text(data.subtitle || 'Why Tactile Puzzles Soothe the Overstimulated Mind', titleX, topMargin + 24, { align: 'center' });
+
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.6);
+  doc.line(leftMargin + 30, topMargin + 32, leftMargin + contentWidth - 30, topMargin + 32);
+
+  // Paragraphs
+  let curY = topMargin + 48;
+  doc.setFont('times', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(40, 40, 40);
+
+  const p1Lines = doc.splitTextToSize(data.paragraphs[0] || '', contentWidth - 20);
+  doc.text(p1Lines, leftMargin + 10, curY);
+  curY += p1Lines.length * 12 + 8;
+
+  const p2Lines = doc.splitTextToSize(data.paragraphs[1] || '', contentWidth - 20);
+  doc.text(p2Lines, leftMargin + 10, curY);
+  curY += p2Lines.length * 12 + 10;
+
+  // 4 Key Benefits box
+  const boxW = contentWidth - 20;
+  const boxX = leftMargin + 10;
+  doc.setFillColor(248, 248, 250);
+  doc.setDrawColor(220, 220, 225);
+  doc.roundedRect(boxX, curY, boxW, 110, 3, 3, 'FD');
+
+  let benefitY = curY + 16;
+  (data.keyBenefits || []).forEach((b) => {
+    doc.setFont('times', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(20, 20, 20);
+    doc.text(`✦ ${b.title}: `, boxX + 10, benefitY);
+
+    doc.setFont('times', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(70, 70, 70);
+    const prefixW = doc.getTextWidth(`✦ ${b.title}: `);
+    const descLines = doc.splitTextToSize(b.desc, boxW - 20 - prefixW);
+    doc.text(descLines, boxX + 10 + prefixW, benefitY);
+    benefitY += Math.max(descLines.length * 10, 16) + 4;
+  });
+
+  curY += 122;
+
+  const p3Lines = doc.splitTextToSize(data.paragraphs[3] || '', contentWidth - 20);
+  doc.text(p3Lines, leftMargin + 10, curY);
+
+  doc.setFont('times', 'italic');
+  doc.setFontSize(9);
+  doc.setTextColor(110, 110, 110);
+  doc.text('"Breathe deeply, take your time, and enjoy the quiet art of being present."', titleX, topMargin + contentHeight - 15, { align: 'center' });
 }

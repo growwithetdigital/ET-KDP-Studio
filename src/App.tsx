@@ -10,31 +10,34 @@ import {
   WordSearchPuzzle,
   MazePuzzle,
   MandalaPuzzle,
+  FrontPageData,
+  TocData,
+  ForewordData,
 } from './types';
 import { THEME_PRESETS } from './generators/themePresets';
 import { generateSudokuSection } from './generators/sudoku';
 import { generateWordSearchSection } from './generators/wordSearch';
 import { generateMazeSection } from './generators/maze';
 import { generateMandalaSection } from './generators/mandala';
+import {
+  createFrontPageData,
+  createTocData,
+  createForewordData,
+  createSectionDividerData,
+} from './generators/frontMatter';
 import { PageRenderer } from './components/PageRenderer';
-import { ThemeSelector } from './components/ThemeSelector';
-import { SectionComposer } from './components/SectionComposer';
 import { PuzzleEditor } from './components/PuzzleEditor';
-import { KdpGuideModal } from './components/KdpGuideModal';
 import { CoverCalculatorModal } from './components/CoverCalculatorModal';
 import { MetadataExportModal } from './components/MetadataExportModal';
 import { exportBookToPdf, ExportProgress } from './utils/pdfExport';
 import {
   Download,
-  BookOpen,
   Calculator,
   Tag,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
   Sparkles,
-  Layers,
-  Printer,
   Grid3X3,
   Search,
   Compass,
@@ -42,65 +45,97 @@ import {
   Edit3,
   BookCheck,
   CheckCircle2,
-  Filter,
+  Printer,
+  SlidersHorizontal,
+  Bookmark,
+  FileText,
+  Eye,
+  Tablet,
 } from 'lucide-react';
 
-const INITIAL_SECTIONS: BookSectionConfig[] = [
-  {
-    id: 'sec-sudoku',
-    type: 'sudoku',
-    title: 'Sudoku Puzzles (25 Pages • Easy to Hard)',
-    pageCount: 25,
-    splitDifficulty: true,
-  },
-  {
-    id: 'sec-wordsearch',
-    type: 'wordsearch',
-    title: 'Themed Word Searches (25 Pages • 8 Directions)',
-    pageCount: 25,
-    splitDifficulty: true,
-  },
-  {
-    id: 'sec-maze',
-    type: 'maze',
-    title: 'Labyrinth Mazes (25 Pages • 3 Difficulty Tiers)',
-    pageCount: 25,
-    splitDifficulty: true,
-  },
-  {
-    id: 'sec-coloring',
-    type: 'coloring',
-    title: 'Mindful Coloring Art (25 Pages • Sacred Motifs)',
-    pageCount: 25,
-    splitDifficulty: true,
-  },
+// The 4 Core Formats & Sections
+const DEFAULT_SECTION_SPECS: { type: PuzzleType; title: string; defaultCount: number }[] = [
+  { type: 'sudoku', title: 'Sudoku Logic Puzzles', defaultCount: 25 },
+  { type: 'wordsearch', title: 'Themed Word Searches', defaultCount: 25 },
+  { type: 'maze', title: 'Labyrinth Mazes', defaultCount: 25 },
+  { type: 'coloring', title: 'Mindful Coloring Art', defaultCount: 25 },
 ];
 
-// Compile section configurations into unified sequential pages with 1/3 difficulty
-function buildPagesForSections(
-  sectionConfigs: BookSectionConfig[],
+// Quick theme inspiration chips (including Marvel & Disney references)
+const QUICK_THEMES = [
+  { name: 'Marvel-Inspired Superheroes', prompt: 'Cosmic Superheroes & Heroic Legends' },
+  { name: 'Disney-Inspired Fairytales', prompt: 'Enchanted Kingdom & Fairy Tale Magic' },
+  { name: 'Cozy Coffee & Rainy Days', prompt: 'Warm Coffee Shop, Autumn Rain & Books' },
+  { name: 'Deep Space Odyssey', prompt: 'Galactic Constellations & Deep Space Nebulas' },
+  { name: 'Zen Japanese Garden', prompt: 'Botanical Bonsai, Lotus Ponds & Stone Lanterns' },
+  { name: 'Ocean Depths & Coral Reefs', prompt: 'Bioluminescent Marine Life & Coral Kingdoms' },
+];
+
+// Master page compiler including Front Page, Table of Contents, Foreword, and all 4 formats
+function compileCompleteBookInterior(
   theme: BookTheme,
+  sections: BookSectionConfig[],
   audience: TargetAudience,
   seed: number,
-  existingPages?: PuzzlePage[]
+  existingCustomizations?: Map<string, PuzzlePage>
 ): PuzzlePage[] {
   const pages: PuzzlePage[] = [];
-  let globalNum = 1;
 
-  const existingMap = new Map<string, PuzzlePage>();
-  if (existingPages) {
-    existingPages.forEach((p) => {
-      existingMap.set(`${p.sectionId}-${p.data.puzzleNumber}`, p);
+  // Total puzzles count
+  const totalPuzzles = sections.reduce((acc, s) => acc + s.pageCount, 0);
+
+  // 1. Front Page / Half-Title (Page 1)
+  pages.push({
+    id: 'page-front-cover',
+    pageNumber: 1,
+    sectionId: 'front-matter',
+    sectionTitle: 'Title Page',
+    type: 'cover',
+    data: createFrontPageData(theme, totalPuzzles),
+  });
+
+  // 2. Table of Contents (Page 2)
+  pages.push({
+    id: 'page-toc',
+    pageNumber: 2,
+    sectionId: 'front-matter',
+    sectionTitle: 'Table of Contents',
+    type: 'toc',
+    data: createTocData(theme, sections, 3),
+  });
+
+  // 3. Foreword (Page 3)
+  pages.push({
+    id: 'page-foreword',
+    pageNumber: 3,
+    sectionId: 'front-matter',
+    sectionTitle: 'Foreword',
+    type: 'foreword',
+    data: createForewordData(theme.name),
+  });
+
+  // 4. Puzzle Sections (Pages 4+)
+  let globalNum = 4;
+
+  sections.forEach((section, sIdx) => {
+    const sSeed = seed + sIdx * 77777;
+    const roman = ['I', 'II', 'III', 'IV', 'V', 'VI'][sIdx] || `${sIdx + 1}`;
+
+    // Part divider page with famous quote and curated description
+    pages.push({
+      id: `divider-${section.id}`,
+      pageNumber: globalNum++,
+      sectionId: section.id,
+      sectionTitle: section.title,
+      type: 'section-divider',
+      data: createSectionDividerData(section.type, theme, `Part ${roman}`, section.pageCount),
     });
-  }
 
-  sectionConfigs.forEach((section, sIdx) => {
-    const sSeed = seed + sIdx * 54321;
     if (section.type === 'sudoku') {
       const items = generateSudokuSection(section.pageCount, sSeed, audience);
       items.forEach((item) => {
         const key = `${section.id}-${item.puzzleNumber}`;
-        const existing = existingMap.get(key);
+        const existing = existingCustomizations?.get(key);
         if (existing && existing.type === 'sudoku') {
           pages.push({
             ...existing,
@@ -130,7 +165,7 @@ function buildPagesForSections(
       );
       items.forEach((item) => {
         const key = `${section.id}-${item.puzzleNumber}`;
-        const existing = existingMap.get(key);
+        const existing = existingCustomizations?.get(key);
         if (existing && existing.type === 'wordsearch') {
           pages.push({
             ...existing,
@@ -155,7 +190,7 @@ function buildPagesForSections(
       const items = generateMazeSection(section.pageCount, sSeed, audience);
       items.forEach((item) => {
         const key = `${section.id}-${item.puzzleNumber}`;
-        const existing = existingMap.get(key);
+        const existing = existingCustomizations?.get(key);
         if (existing && existing.type === 'maze') {
           pages.push({
             ...existing,
@@ -180,7 +215,7 @@ function buildPagesForSections(
       const items = generateMandalaSection(section.pageCount, theme.coloringPrompts, sSeed);
       items.forEach((item) => {
         const key = `${section.id}-${item.puzzleNumber}`;
-        const existing = existingMap.get(key);
+        const existing = existingCustomizations?.get(key);
         if (existing && existing.type === 'coloring') {
           pages.push({
             ...existing,
@@ -208,24 +243,35 @@ function buildPagesForSections(
 }
 
 export default function App() {
-  // Theme State
-  const [currentTheme, setCurrentTheme] = useState<BookTheme>(THEME_PRESETS[0]);
+  // Theme Input State
+  const [themeInputText, setThemeInputText] = useState('Marvel-Inspired Superhero Odyssey');
+  const [currentTheme, setCurrentTheme] = useState<BookTheme>(() => ({
+    ...THEME_PRESETS[0],
+    name: 'Marvel-Inspired Superhero Odyssey',
+    kdpTitle: 'The Superhero Activity & Logic Guide',
+    kdpSubtitle: '100 Calibrated Puzzles, Large-Print Word Searches & Mindful Coloring for Focus',
+  }));
+
   const [targetAudience, setTargetAudience] = useState<TargetAudience>('adults');
+  const [seedCounter, setSeedCounter] = useState<number>(42);
 
-  // Book Section Formats State
-  const [sections, setSections] = useState<BookSectionConfig[]>(INITIAL_SECTIONS);
-  const [seedCounter, setSeedCounter] = useState<number>(100);
+  // The 4 Formats Configuration (25 pages each = 100 pages total by default)
+  const [formatCounts, setFormatCounts] = useState<{ [key in PuzzleType]: number }>({
+    sudoku: 25,
+    wordsearch: 25,
+    maze: 25,
+    coloring: 25,
+  });
 
-  // Filter sidebar view: 'all' or sectionId
-  const [sidebarFilter, setSidebarFilter] = useState<string>('all');
+  // Current active page in viewer
   const [selectedPageNumber, setSelectedPageNumber] = useState<number>(1);
 
-  // Master Compiled Pages State
-  const [curatedPages, setCuratedPages] = useState<PuzzlePage[]>(() =>
-    buildPagesForSections(INITIAL_SECTIONS, THEME_PRESETS[0], 'adults', 100)
-  );
+  // Modals
+  const [showEditorModal, setShowEditorModal] = useState(false);
+  const [showCoverModal, setShowCoverModal] = useState(false);
+  const [showMetadataModal, setShowMetadataModal] = useState(false);
 
-  // KDP Bleed & Guides State
+  // KDP Bleed Preview Toggle
   const [kdpConfig, setKdpConfig] = useState<KdpMarginConfig>({
     trimSize: '8.5x11',
     bleed: true,
@@ -239,106 +285,99 @@ export default function App() {
     largePrint: false,
   });
 
-  // Modals
-  const [showEditorModal, setShowEditorModal] = useState(false);
-  const [showGuideModal, setShowGuideModal] = useState(false);
-  const [showCoverModal, setShowCoverModal] = useState(false);
-  const [showMetadataModal, setShowMetadataModal] = useState(false);
-
-  // Loading & Generation States
-  const [isLoadingAi, setIsLoadingAi] = useState(false);
-  const [isGeneratingArt, setIsGeneratingArt] = useState(false);
+  // Generation & Loading States
+  const [isGenerating, setIsGenerating] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
 
-  // Helper to re-build pages when sections change
-  const handleUpdateSections = (newSections: BookSectionConfig[]) => {
-    setSections(newSections);
-    setCuratedPages((prev) =>
-      buildPagesForSections(newSections, currentTheme, targetAudience, seedCounter, prev)
-    );
-  };
+  // Current Sections Array based on formatCounts
+  const sections: BookSectionConfig[] = useMemo(() => {
+    return DEFAULT_SECTION_SPECS.map((spec) => ({
+      id: `sec-${spec.type}`,
+      type: spec.type,
+      title: `${spec.title} (${formatCounts[spec.type]} Pages)`,
+      pageCount: formatCounts[spec.type],
+      splitDifficulty: true,
+    }));
+  }, [formatCounts]);
 
-  // Re-build when theme changes
-  const handleSelectTheme = (newTheme: BookTheme) => {
-    setCurrentTheme(newTheme);
-    setTargetAudience(newTheme.targetAudience);
-    setCuratedPages(
-      buildPagesForSections(sections, newTheme, newTheme.targetAudience, Date.now())
-    );
-  };
+  // Master Compiled Pages State
+  const [bookPages, setBookPages] = useState<PuzzlePage[]>(() =>
+    compileCompleteBookInterior(
+      {
+        ...THEME_PRESETS[0],
+        name: 'Marvel-Inspired Superhero Odyssey',
+        kdpTitle: 'The Superhero Activity & Logic Guide',
+        kdpSubtitle: '100 Calibrated Puzzles, Large-Print Word Searches & Mindful Coloring for Focus',
+      },
+      DEFAULT_SECTION_SPECS.map((spec) => ({
+        id: `sec-${spec.type}`,
+        type: spec.type,
+        title: `${spec.title} (${spec.defaultCount} Pages)`,
+        pageCount: spec.defaultCount,
+        splitDifficulty: true,
+      })),
+      'adults',
+      42
+    )
+  );
 
-  // Re-roll all sections with new random seed
-  const handleRerollAll = () => {
-    const nextSeed = Date.now();
-    setSeedCounter(nextSeed);
-    setCuratedPages(
-      buildPagesForSections(sections, currentTheme, targetAudience, nextSeed)
-    );
-  };
-
-  // Switch audience and regenerate calibrated puzzles
-  const handleChangeAudience = (newAudience: TargetAudience) => {
-    setTargetAudience(newAudience);
-    const nextSeed = Date.now();
-    setSeedCounter(nextSeed);
-    setCuratedPages(
-      buildPagesForSections(sections, currentTheme, newAudience, nextSeed)
-    );
-  };
-
-  // Filtered pages for sidebar
-  const visiblePages = useMemo(() => {
-    if (sidebarFilter === 'all') return curatedPages;
-    return curatedPages.filter((p) => p.sectionId === sidebarFilter);
-  }, [curatedPages, sidebarFilter]);
-
-  // Current active page
+  // Active page object
   const currentPage = useMemo(() => {
-    const found = curatedPages.find((p) => p.pageNumber === selectedPageNumber);
-    return found || curatedPages[0];
-  }, [curatedPages, selectedPageNumber]);
+    return bookPages.find((p) => p.pageNumber === selectedPageNumber) || bookPages[0];
+  }, [bookPages, selectedPageNumber]);
 
-  // Update specific page from editor
-  const handleSavePage = (updatedPage: PuzzlePage) => {
-    setCuratedPages((prev) =>
-      prev.map((item) => (item.id === updatedPage.id ? updatedPage : item))
-    );
-  };
+  // Total Puzzles & Solutions calculation
+  const totalPuzzlePages = useMemo(() => {
+    return Object.values(formatCounts).reduce((a, b) => a + b, 0);
+  }, [formatCounts]);
 
-  // AI Theme Enrichment Handler
-  const handleEnrichCustomTheme = async (themePrompt: string, aud: TargetAudience = targetAudience) => {
-    setIsLoadingAi(true);
+  const totalSolutionPages = Math.ceil(
+    (formatCounts.sudoku + formatCounts.wordsearch + formatCounts.maze) / 4
+  );
+
+  // Handle Generate Activity Book
+  const handleGenerateBook = async (customThemePrompt?: string) => {
+    const promptToUse = (customThemePrompt || themeInputText).trim();
+    if (!promptToUse) return;
+
+    setIsGenerating(true);
+    const nextSeed = Date.now();
+    setSeedCounter(nextSeed);
+
     try {
+      // Fetch AI enrichment for high-intent theme vocabulary and coloring art
       const response = await fetch('/api/ai/theme-enrichment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ theme: themePrompt, audience: aud }),
+        body: JSON.stringify({ theme: promptToUse, audience: targetAudience }),
       });
 
       const resData = await response.json();
+      let updatedTheme: BookTheme;
+
       if (resData.success && resData.data) {
         const enriched = resData.data;
-        const newTheme: BookTheme = {
-          id: `custom-${Date.now()}`,
-          name: themePrompt,
-          targetAudience: aud,
+        updatedTheme = {
+          id: `custom-${nextSeed}`,
+          name: promptToUse,
+          targetAudience,
           targetAgeLabel:
-            aud === 'kids'
+            targetAudience === 'kids'
               ? 'Kids Ages 4–8'
-              : aud === 'seniors'
+              : targetAudience === 'seniors'
               ? 'Seniors & Low-Vision Adults'
               : 'Teens & Adults',
-          category: 'Hyper-Specific Sub-Niche',
-          tagline: `Calming activity collection: ${themePrompt}`,
-          kdpTitle: enriched.title || `The ${themePrompt} Activity Book`,
+          category: 'Mindfulness & Logic Puzzles',
+          tagline: `Calming activity book: ${promptToUse}`,
+          kdpTitle: enriched.title || `The ${promptToUse} Activity Book`,
           kdpSubtitle:
             enriched.subtitle ||
-            'Fun Puzzles, Large Print Word Searches, Sudoku & Coloring for Calm and Focus',
+            '100 Calibrated Puzzles, Large-Print Word Searches & Mindful Coloring for Focus and Calm',
           kdpKeywords: enriched.kdpKeywords || [
-            `${themePrompt.toLowerCase()} activity book`,
-            'word search for adults',
+            `${promptToUse.toLowerCase()} activity book`,
             'large print puzzle book',
             'stress relief brain games',
+            'anxiety relief puzzles',
             'gifts for puzzle lovers',
           ],
           kdpCategories: [
@@ -347,97 +386,105 @@ export default function App() {
           ],
           kdpDescription:
             enriched.kdpDescription ||
-            `<h3>The Ultimate ${themePrompt} Activity Book</h3><p>Enjoy hours of engaging entertainment and calm focus.</p>`,
+            `<h3>The Ultimate ${promptToUse} Activity Book</h3><p>Enjoy hours of engaging entertainment and calm focus.</p>`,
           mindfulQuotes: [
             'Take a quiet breath and let tension soften away.',
-            'Enjoy the calm flow of discovery and focus.',
+            'Enjoy the quiet flow of discovery and focus.',
+            'There is no rush; one mindful step at a time.',
           ],
           wordSearchVocabs: enriched.wordSearchSets?.length
             ? enriched.wordSearchSets
             : currentTheme.wordSearchVocabs,
           coloringPrompts: enriched.coloringPrompts?.length
             ? enriched.coloringPrompts.map((p: string, i: number) => ({
-                title: `${themePrompt} Scene #${i + 1}`,
+                title: `${promptToUse} Motif #${i + 1}`,
                 prompt: p,
                 motif: 'botanical-leaf' as const,
               }))
             : currentTheme.coloringPrompts,
         };
-
-        handleSelectTheme(newTheme);
-      }
-    } catch (err) {
-      console.error('Error enriching theme:', err);
-    } finally {
-      setIsLoadingAi(false);
-    }
-  };
-
-  // AI Line Art Generation for Coloring Page
-  const handleGenerateAiArt = async (pageIdx: number, promptText: string) => {
-    setIsGeneratingArt(true);
-    try {
-      const response = await fetch('/api/ai/coloring-page', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: promptText,
-          theme: currentTheme.name,
-        }),
-      });
-
-      const data = await response.json();
-      if (data.success && data.imageUrl) {
-        setCuratedPages((prev) =>
-          prev.map((p, idx) => {
-            if (idx === pageIdx && p.type === 'coloring') {
-              return {
-                ...p,
-                data: {
-                  ...p.data,
-                  aiImageUrl: data.imageUrl,
-                } as MandalaPuzzle,
-              };
-            }
-            return p;
-          })
-        );
       } else {
-        alert(data.error || 'Failed to generate AI line art.');
+        // Fallback robust theme
+        updatedTheme = {
+          ...currentTheme,
+          name: promptToUse,
+          kdpTitle: `The ${promptToUse} Activity Book`,
+          kdpSubtitle:
+            '100 Calibrated Puzzles, Large-Print Word Searches & Mindful Coloring for Focus and Calm',
+        };
       }
+
+      setCurrentTheme(updatedTheme);
+
+      // Re-compile all interior pages with front page, table of contents, foreword, and puzzles
+      const compiled = compileCompleteBookInterior(
+        updatedTheme,
+        sections,
+        targetAudience,
+        nextSeed
+      );
+      setBookPages(compiled);
+      setSelectedPageNumber(1);
     } catch (err) {
-      console.error('Error generating AI art:', err);
+      console.error('Error generating book:', err);
+      // Generate programmatically without network failure
+      const updatedTheme: BookTheme = {
+        ...currentTheme,
+        name: promptToUse,
+        kdpTitle: `The ${promptToUse} Activity Book`,
+        kdpSubtitle:
+          '100 Calibrated Puzzles, Large-Print Word Searches & Mindful Coloring for Focus and Calm',
+      };
+      setCurrentTheme(updatedTheme);
+      const compiled = compileCompleteBookInterior(
+        updatedTheme,
+        sections,
+        targetAudience,
+        nextSeed
+      );
+      setBookPages(compiled);
+      setSelectedPageNumber(1);
     } finally {
-      setIsGeneratingArt(false);
+      setIsGenerating(false);
     }
   };
 
-  // PDF Export Trigger for the Entire Curated Book!
-  const handleExportBookPdf = async () => {
+  // Re-generate individual page save
+  const handleSavePage = (updatedPage: PuzzlePage) => {
+    setBookPages((prev) =>
+      prev.map((item) => (item.id === updatedPage.id ? updatedPage : item))
+    );
+  };
+
+  // Handle PDF Export (Print or Digital Interactive)
+  const handleExportPdf = async (isInteractiveDigital = false) => {
     try {
-      const totalPages = curatedPages.length;
-      const totalSolPages = Math.ceil(totalPages / 4);
+      const totalPages = bookPages.length;
 
       setExportProgress({
         currentPage: 0,
-        totalPages: totalPages + totalSolPages,
-        status: `Forging ${currentTheme.kdpTitle} (${totalPages} Curated Pages + ${totalSolPages} Solution Pages)...`,
+        totalPages: totalPages + totalSolutionPages,
+        status: isInteractiveDigital
+          ? `Forging Digital Interactive Edition (${totalPages} Pages with Clickable Navigation)...`
+          : `Forging Deluxe Collector's Edition (${totalPages} Interior Pages + ${totalSolutionPages} Solutions Pages)...`,
       });
 
       const blob = await exportBookToPdf(
-        curatedPages,
+        bookPages,
         kdpConfig,
         currentTheme.name,
         currentTheme.kdpTitle,
         true,
-        (progress) => setExportProgress(progress)
+        (progress) => setExportProgress(progress),
+        isInteractiveDigital
       );
 
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       const cleanTitle = currentTheme.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
-      link.download = `${cleanTitle}_activity_book_${curatedPages.length}_pages_kdp.pdf`;
+      const suffix = isInteractiveDigital ? 'interactive_digital' : 'deluxe_edition';
+      link.download = `${cleanTitle}_activity_book_${bookPages.length}p_${suffix}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -450,49 +497,37 @@ export default function App() {
     }
   };
 
-  const totalInteriorPages = curatedPages.length;
-  const totalSolutionPages = Math.ceil(totalInteriorPages / 4);
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
-      {/* Light Theme Editorial Header */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 px-4 lg:px-8 py-3 flex items-center justify-between shadow-2xs">
+      {/* Clean Uncluttered Header */}
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 px-4 sm:px-8 py-3 flex items-center justify-between shadow-2xs">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-600/30">
-            <Sparkles className="w-5 h-5" />
+          <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-xs">
+            <Sparkles className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base font-bold text-slate-900 tracking-tight">
-                VibeBook Forge Studio
+                VibeBook Forge
               </h1>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                <BookCheck size={11} />
-                <span>Multi-Format KDP Engine</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                Deluxe Activity Book Studio
               </span>
             </div>
             <p className="text-[11px] text-slate-500 hidden sm:block">
-              Dynamic Section Composer • 1/3 Difficulty Progression • High-End Serif Aesthetics • Golden Rule Solutions
+              Front Matter • 4 Curated Formats • 1/3 Difficulty Split • Section Quotes & Solutions
             </p>
           </div>
         </div>
 
-        {/* Action Buttons */}
+        {/* Header Action Tools */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowGuideModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs transition"
-          >
-            <BookOpen size={13} className="text-indigo-600" />
-            <span className="hidden md:inline">Niche Playbook</span>
-          </button>
-
           <button
             onClick={() => setShowCoverModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs transition"
           >
-            <Calculator size={13} className="text-emerald-600" />
-            <span className="hidden md:inline">Cover Calculator</span>
+            <Sparkles size={13} className="text-indigo-600" />
+            <span className="hidden sm:inline">4K Cover Studio</span>
           </button>
 
           <button
@@ -500,163 +535,277 @@ export default function App() {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs transition"
           >
             <Tag size={13} className="text-purple-600" />
-            <span className="hidden md:inline">SEO & Keywords</span>
+            <span className="hidden sm:inline">Search Metadata</span>
           </button>
 
-          {/* Export Full Book PDF Button */}
+          {/* Option 1: Print Edition PDF */}
           <button
-            onClick={handleExportBookPdf}
+            onClick={() => handleExportPdf(false)}
             disabled={exportProgress !== null}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/25 transition disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-2xs transition disabled:opacity-50"
+            title="Download clean 8.5x11 printable PDF with solutions"
           >
-            <Download size={14} />
-            <span>
-              Download PDF ({totalInteriorPages}p + Solutions)
-            </span>
+            <Printer size={13} className="text-emerald-400" />
+            <span>Print Edition PDF</span>
+          </button>
+
+          {/* Option 2: Digital Interactive PDF */}
+          <button
+            onClick={() => handleExportPdf(true)}
+            disabled={exportProgress !== null}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-600/25 transition disabled:opacity-50"
+            title="Download interactive PDF with clickable TOC and solution jump links for tablets & offline use"
+          >
+            <Tablet size={13} className="text-indigo-200" />
+            <span>Digital Interactive PDF</span>
           </button>
         </div>
       </header>
 
       {/* Main Studio Body */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        {/* Left Sidebar: Pages Directory & Filter */}
-        <aside className="w-full lg:w-80 bg-white border-r border-slate-200/90 flex flex-col max-h-[calc(100vh-57px)]">
-          {/* Section Quick Filters */}
-          <div className="p-3 border-b border-slate-200/80 bg-slate-50/50">
+      <main className="flex-1 flex flex-col items-center p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-6">
+        {/* Step 1 & 2: Clean Generation Deck */}
+        <div className="w-full bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs space-y-5">
+          {/* Theme Input Bar */}
+          <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block">
-                Book Pages Navigation
-              </span>
+              <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5 uppercase tracking-wider">
+                <Bookmark size={13} className="text-indigo-600" />
+                <span>1. Enter Your Book Theme & Concept</span>
+              </label>
+
+              <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                <span>Target Audience:</span>
+                <select
+                  value={targetAudience}
+                  onChange={(e) => setTargetAudience(e.target.value as TargetAudience)}
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5 font-semibold text-slate-800 text-xs focus:outline-none"
+                >
+                  <option value="adults">Adults & Busy Minds</option>
+                  <option value="seniors">Seniors (Large Print)</option>
+                  <option value="kids">Kids (Ages 4–8)</option>
+                  <option value="teens">Teens & Young Adults</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2.5">
+              <input
+                type="text"
+                value={themeInputText}
+                onChange={(e) => setThemeInputText(e.target.value)}
+                placeholder="e.g. Marvel Superheroes, Disney Fairytales, Cozy Rainy Cafe, Deep Space..."
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
+              />
+
               <button
-                onClick={handleRerollAll}
-                className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 transition"
-                title="Regenerate all puzzles with unique non-repeating layouts"
+                type="button"
+                onClick={() => handleGenerateBook()}
+                disabled={isGenerating}
+                className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-600/25 transition disabled:opacity-50 shrink-0"
               >
-                <RefreshCw size={11} />
-                <span>Re-roll All</span>
+                <Sparkles size={15} />
+                <span>{isGenerating ? 'Forging 100-Page Book...' : 'Generate Activity Book'}</span>
               </button>
             </div>
 
-            {/* Filter Pills */}
-            <div className="flex flex-wrap gap-1 text-[11px]">
-              <button
-                onClick={() => setSidebarFilter('all')}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition ${
-                  sidebarFilter === 'all'
-                    ? 'bg-slate-900 text-white shadow-2xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                All ({curatedPages.length})
-              </button>
-
-              {sections.map((sec) => (
+            {/* Quick Inspiration Pills */}
+            <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+              <span className="text-[11px] text-slate-400 mr-1">Try Inspiration:</span>
+              {QUICK_THEMES.map((theme) => (
                 <button
-                  key={sec.id}
-                  onClick={() => setSidebarFilter(sec.id)}
-                  className={`px-2 py-1 rounded-lg font-medium transition truncate max-w-[120px] ${
-                    sidebarFilter === sec.id
-                      ? 'bg-indigo-600 text-white shadow-2xs'
-                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                  }`}
-                  title={sec.title}
+                  key={theme.name}
+                  type="button"
+                  onClick={() => {
+                    setThemeInputText(theme.prompt);
+                    handleGenerateBook(theme.prompt);
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 transition border border-slate-200/80"
                 >
-                  {sec.type.toUpperCase()} ({sec.pageCount}p)
+                  {theme.name}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Sequential Pages Scroll List */}
-          <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
-            {visiblePages.map((pageItem) => {
-              const isSelected = currentPage.pageNumber === pageItem.pageNumber;
-              const pageNum = pageItem.pageNumber;
+          {/* The 4 Formats & Sections Grid */}
+          <div className="pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <FileText size={13} className="text-indigo-600" />
+                <span>2. The 4 Activity Formats Included (25 Pages Each = 100 Pages Total)</span>
+              </span>
+              <span className="text-[11px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                1/3 Easy • 1/3 Medium • 1/3 Hard
+              </span>
+            </div>
 
-              return (
-                <button
-                  key={pageItem.id}
-                  onClick={() => setSelectedPageNumber(pageNum)}
-                  className={`w-full flex items-center justify-between p-2 rounded-xl border text-left transition-all ${
-                    isSelected
-                      ? 'bg-indigo-50 border-indigo-400 shadow-xs ring-1 ring-indigo-400/30'
-                      : 'bg-white border-slate-200/80 hover:bg-slate-50 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span
-                      className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
-                        isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {pageNum}
-                    </span>
-                    <div className="truncate">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-semibold text-slate-800 truncate">
-                          {pageItem.data.title || `${pageItem.type} #${pageItem.data.puzzleNumber}`}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5 font-mono">
-                        <span
-                          className={`font-semibold px-1 rounded ${
-                            pageItem.difficulty === 'Easy'
-                              ? 'text-emerald-700 bg-emerald-50'
-                              : pageItem.difficulty === 'Medium'
-                              ? 'text-amber-700 bg-amber-50'
-                              : 'text-rose-700 bg-rose-50'
-                          }`}
-                        >
-                          {pageItem.difficulty} ({pageItem.difficultyTier}/3)
-                        </span>
-                        <span>•</span>
-                        <span className="capitalize text-slate-400">
-                          {pageItem.type}
-                        </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {DEFAULT_SECTION_SPECS.map((spec) => {
+                const count = formatCounts[spec.type];
+
+                return (
+                  <div
+                    key={spec.type}
+                    className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between space-y-2.5"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 rounded-lg bg-white border border-slate-200 shadow-2xs">
+                          {spec.type === 'sudoku' && <Grid3X3 size={16} className="text-indigo-600" />}
+                          {spec.type === 'wordsearch' && <Search size={16} className="text-emerald-600" />}
+                          {spec.type === 'maze' && <Compass size={16} className="text-amber-600" />}
+                          {spec.type === 'coloring' && <Palette size={16} className="text-purple-600" />}
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-slate-900 block leading-tight">
+                            {spec.title}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            {spec.type === 'sudoku' && 'Logic Board Grids'}
+                            {spec.type === 'wordsearch' && 'Themed Vocabulary'}
+                            {spec.type === 'maze' && 'Pathfinding Mazes'}
+                            {spec.type === 'coloring' && 'Vector Motifs'}
+                          </span>
+                        </div>
                       </div>
                     </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
+                      <span className="text-[11px] text-slate-500 font-medium">Page Volume:</span>
+                      <select
+                        value={count}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setFormatCounts((prev) => ({ ...prev, [spec.type]: val }));
+                        }}
+                        className="bg-white border border-slate-200 rounded-lg px-2 py-0.5 text-xs font-bold text-slate-800 shadow-2xs"
+                      >
+                        <option value={15}>15 Pages</option>
+                        <option value={20}>20 Pages</option>
+                        <option value={25}>25 Pages</option>
+                        <option value={30}>30 Pages</option>
+                        <option value={50}>50 Pages</option>
+                      </select>
+                    </div>
                   </div>
-
-                  <span className="text-[10px] font-mono text-slate-400 shrink-0 ml-1">
-                    {pageNum % 2 !== 0 ? 'R' : 'L'}
-                  </span>
-                </button>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </aside>
+        </div>
 
-        {/* Center Main Stage */}
-        <main className="flex-1 flex flex-col overflow-y-auto p-4 sm:p-6 items-center">
-          {/* Theme Selector */}
-          <div className="w-full max-w-4xl mb-4">
-            <ThemeSelector
-              currentTheme={currentTheme}
-              onSelectTheme={handleSelectTheme}
-              onEnrichCustomTheme={handleEnrichCustomTheme}
-              isLoadingAi={isLoadingAi}
-              selectedAudience={targetAudience}
-              onChangeAudience={handleChangeAudience}
-            />
+        {/* Book Interior Files Navigation Bar */}
+        <div className="w-full bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                  Book Interior Files Generated:
+                </span>
+                <span className="text-xs font-bold text-indigo-700">
+                  {currentTheme.kdpTitle}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Front Matter (Title, TOC, Foreword) • {totalPuzzlePages} Puzzles • {totalSolutionPages} Solution Pages
+              </p>
+            </div>
+
+            {/* Quick Section Jump Pills */}
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setSelectedPageNumber(1)}
+                className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                  selectedPageNumber === 1
+                    ? 'bg-slate-900 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                📖 Title (p.1)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedPageNumber(2)}
+                className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                  selectedPageNumber === 2
+                    ? 'bg-slate-900 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                📑 Contents (p.2)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedPageNumber(3)}
+                className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                  selectedPageNumber === 3
+                    ? 'bg-slate-900 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                ✍️ Foreword (p.3)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedPageNumber(4)}
+                className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                  currentPage.type === 'sudoku' ||
+                  (currentPage.type === 'section-divider' && (currentPage.data as any).sectionType === 'sudoku')
+                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Part I: Sudoku (p.4)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedPageNumber(4 + formatCounts.sudoku + 1)}
+                className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                  currentPage.type === 'wordsearch' ||
+                  (currentPage.type === 'section-divider' && (currentPage.data as any).sectionType === 'wordsearch')
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Part II: Word Search
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedPageNumber(4 + formatCounts.sudoku + 1 + formatCounts.wordsearch + 1)}
+                className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                  currentPage.type === 'maze' ||
+                  (currentPage.type === 'section-divider' && (currentPage.data as any).sectionType === 'maze')
+                    ? 'bg-amber-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Part III: Mazes
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectedPageNumber(
+                    4 + formatCounts.sudoku + 1 + formatCounts.wordsearch + 1 + formatCounts.maze + 1
+                  )
+                }
+                className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                  currentPage.type === 'coloring' ||
+                  (currentPage.type === 'section-divider' && (currentPage.data as any).sectionType === 'coloring')
+                    ? 'bg-purple-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Part IV: Coloring
+              </button>
+            </div>
           </div>
 
-          {/* Book Formats & Section Composer */}
-          <div className="w-full max-w-4xl mb-5">
-            <SectionComposer
-              sections={sections}
-              onUpdateSections={handleUpdateSections}
-              totalPages={totalInteriorPages}
-              totalSolutionPages={totalSolutionPages}
-              targetAudience={targetAudience}
-              onExportBookPdf={handleExportBookPdf}
-              isExporting={exportProgress !== null}
-            />
-          </div>
-
-          {/* Quick Page Bar */}
-          <div className="w-full max-w-4xl flex flex-wrap items-center justify-between gap-3 mb-4 bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-2xs text-xs">
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
+          {/* Page Step Navigator */}
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 cursor-pointer text-slate-600">
                 <input
                   type="checkbox"
                   checked={kdpConfig.showGuides}
@@ -665,60 +814,44 @@ export default function App() {
                   }
                   className="rounded border-slate-300 text-indigo-600 focus:ring-0"
                 />
-                <span className="font-medium text-slate-600">
-                  Show KDP Safe & Bleed Margins (Preview Only)
-                </span>
+                <span>Show Safe Margins & Bleed Guides</span>
               </label>
-
-              <button
-                onClick={() => setShowEditorModal(true)}
-                className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800"
-              >
-                <Edit3 size={13} />
-                <span>Customize Current Page</span>
-              </button>
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setSelectedPageNumber((p) => Math.max(1, p - 1))}
-                disabled={currentPage.pageNumber <= 1}
-                className="p-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-40"
+                disabled={selectedPageNumber <= 1}
+                className="p-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-30"
               >
                 <ChevronLeft size={16} />
               </button>
 
-              <span className="text-xs font-mono font-medium text-slate-700">
-                Page {currentPage.pageNumber} of {totalInteriorPages}
+              <span className="text-xs font-mono font-bold text-slate-800">
+                Page {selectedPageNumber} of {bookPages.length}
               </span>
 
               <button
-                onClick={() =>
-                  setSelectedPageNumber((p) =>
-                    Math.min(totalInteriorPages, p + 1)
-                  )
-                }
-                disabled={currentPage.pageNumber >= totalInteriorPages}
-                className="p-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-40"
+                onClick={() => setSelectedPageNumber((p) => Math.min(bookPages.length, p + 1))}
+                disabled={selectedPageNumber >= bookPages.length}
+                className="p-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-30"
               >
                 <ChevronRight size={16} />
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Page Renderer Preview */}
-          <div className="w-full flex justify-center pb-12">
-            <PageRenderer
-              page={currentPage}
-              config={kdpConfig}
-              themeName={currentTheme.name}
-              onOpenEditor={() => setShowEditorModal(true)}
-              onGenerateAiArt={handleGenerateAiArt}
-              isGeneratingArt={isGeneratingArt}
-            />
-          </div>
-        </main>
-      </div>
+        {/* High-Resolution Book Page Viewer Stage */}
+        <div className="w-full flex justify-center pb-12">
+          <PageRenderer
+            page={currentPage}
+            config={kdpConfig}
+            themeName={currentTheme.name}
+            onOpenEditor={() => setShowEditorModal(true)}
+          />
+        </div>
+      </main>
 
       {/* Export Progress Modal */}
       {exportProgress && (
@@ -729,7 +862,9 @@ export default function App() {
             </div>
 
             <h3 className="text-sm font-bold text-slate-900 mb-1">
-              Forging Print-Ready KDP PDF
+              {exportProgress.status.includes('Digital')
+                ? 'Forging Digital Interactive Edition'
+                : 'Forging Deluxe Activity Book PDF'}
             </h3>
             <p className="text-xs text-slate-500 mb-4">{exportProgress.status}</p>
 
@@ -765,15 +900,13 @@ export default function App() {
         onClose={() => setShowEditorModal(false)}
         page={currentPage}
         onSavePage={handleSavePage}
-        onGenerateAiArt={handleGenerateAiArt}
-        isGeneratingArt={isGeneratingArt}
       />
-      <KdpGuideModal isOpen={showGuideModal} onClose={() => setShowGuideModal(false)} />
       <CoverCalculatorModal
         isOpen={showCoverModal}
         onClose={() => setShowCoverModal(false)}
-        pageCount={totalInteriorPages + totalSolutionPages}
-        themeTitle={currentTheme.kdpTitle}
+        pageCount={bookPages.length + totalSolutionPages}
+        theme={currentTheme}
+        audience={targetAudience}
       />
       <MetadataExportModal
         isOpen={showMetadataModal}

@@ -79,15 +79,90 @@ export interface MandalaPuzzle {
   strokeWeight?: 'extra-thick' | 'bold' | 'fine';
 }
 
+export type PageType =
+  | 'cover'
+  | 'toc'
+  | 'foreword'
+  | 'section-divider'
+  | 'sudoku'
+  | 'wordsearch'
+  | 'maze'
+  | 'coloring';
+
+export interface FrontPageData {
+  title: string;
+  subtitle: string;
+  themeName: string;
+  authorNote?: string;
+  audienceLabel: string;
+  totalPuzzles: number;
+}
+
+export interface TocEntry {
+  title: string;
+  startPage: number;
+  endPage?: number;
+  pageCount: number;
+  subtitle: string;
+  type: PageType;
+}
+
+export interface TocData {
+  title: string;
+  subtitle: string;
+  entries: TocEntry[];
+}
+
+export interface ForewordData {
+  title: string;
+  subtitle: string;
+  paragraphs: string[];
+  keyBenefits: { title: string; desc: string }[];
+}
+
+export interface SectionDividerData {
+  partNumber: string;
+  sectionType: PuzzleType;
+  title: string;
+  subtitle: string;
+  curatedDescription: string;
+  quote: {
+    text: string;
+    author: string;
+    sourceOrRole?: string;
+  };
+  totalSectionPages: number;
+  difficultySummary: string;
+}
+
+export interface CoverPromptData {
+  bookTitle: string;
+  bookSubtitle: string;
+  themePrompt: string;
+  artisticStyle: string;
+  fullMidjourneyPrompt: string;
+  dalleGeminiPrompt: string;
+  recommendedPalette: string[];
+  dimensionsRecommendation: string;
+}
+
 export interface PuzzlePage {
   id: string;
   pageNumber: number; // 1-based book page number
   sectionId: string;
   sectionTitle: string;
-  difficulty: DifficultyLevel;
-  difficultyTier: 1 | 2 | 3; // 1/3, 2/3, 3/3
-  type: PuzzleType;
-  data: SudokuPuzzle | WordSearchPuzzle | MazePuzzle | MandalaPuzzle;
+  difficulty?: DifficultyLevel;
+  difficultyTier?: 1 | 2 | 3; // 1/3, 2/3, 3/3
+  type: PageType;
+  data:
+    | SudokuPuzzle
+    | WordSearchPuzzle
+    | MazePuzzle
+    | MandalaPuzzle
+    | FrontPageData
+    | TocData
+    | ForewordData
+    | SectionDividerData;
 }
 
 export interface BookTheme {
